@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>出荷検査成績書フォームオークマ専用MB46V</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    html, body {
+      background: #e7e7e7;
+      margin: 0;
+      padding: 0;
+      font-family: 'Arial', sans-serif;
+      font-size: 3mm;
+    }
+    .b5-preview {
+      background: #fff;
+      margin: 10mm auto;
+      box-shadow: 0 0 5mm #bbb;
+      width: 176mm;
+      max-width: 98vw;
+      padding: 8mm;
+      box-sizing: border-box;
+      position: relative;
+      overflow: hidden;
+    }
+    h2 { text-align: center; margin: 0 0 6mm 0; font-size: 4mm; letter-spacing: 2mm;}
+    table { border-collapse: collapse; width: 100%; margin-bottom: 3mm;}
+    th, td {
+      border: 0.3mm solid #333;
+      padding: 1.2mm 1mm;
+      text-align: center;
+      font-size: 3mm;
+      background: #fff;
+    }
+    th { background: #f0f0f0; }
+    .section-label { text-align: left; font-weight: bold; background: #f9f9f9; }
+    input, select {
+      box-sizing: border-box;
+      font-size: 3mm;
+      padding: 0.5mm;
+    }
+    .button { margin: 3mm 0; padding: 2mm 8mm; font-size: 3mm; }
+    .footer { text-align: right; margin-top: 3mm; font-size: 3mm;}
+    .stamp-box-row {
+      display: flex; justify-content: flex-end; gap: 10mm; margin-top: 3mm;
+    }
+    .signature-wrap {
+      display: inline-block;
+      width: 22mm; height: 22mm;
+      border: 0.5mm solid #333;
+      border-radius: 2mm;
+      background: #fafbfc;
+      position: relative;
+      box-sizing: border-box;
+      text-align: center;
+      vertical-align: top;
+      margin-left: 3mm;
+    }
+    .signature-label {
+      font-size: 2mm;
+      color: #888;
+      position: absolute;
+      left: 0; top: 0; width: 100%; height: 100%;
+      display: flex; justify-content: center; align-items: center;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .signature-canvas {
+      width: 100%; height: 100%;
+      background: transparent;
+      display: block;
+      border-radius: 2mm;
+      z-index: 2;
+      touch-action: none;
+    }
+    .signature-actions {
+      margin-top: 1mm;
+      text-align: right;
+    }
+    .signature-actions button {
+      font-size: 2mm;
+      padding: 0.5mm 4mm;
+      border-radius: 2mm;
+      border: 0.3mm solid #bbb;
+      background: #f8f8f8;
+      cursor: pointer;
+      margin-left: 1mm;
+      transition: background .2s;
+    }
+    .signature-actions button:hover { background: #e3e3e3; }
+    .td-flex {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 1mm;
+      width: 100%;
+    }
+    .td-flex input[type="number"] {
+      width: 60%;
+      min-width: 10mm;
+      max-width: 18mm;
+      text-align: right;
+    }
+    .unit-span {
+      min-width: 6mm;
+      text-align: right;
+      font-size: 3mm;
+      margin-left: 1mm;
+    }
+    .remark-row td { text-align: left !important; }
+    @media print {
+      @page { size: B5 portrait; margin: 0;}
+      html, body { background: none !important; margin: 0 !important; padding: 0 !important; }
+      .b5-preview {
+        width: 176mm !important; min-width: 176mm !important; max-width: 176mm !important;
+        min-height: 250mm !important; max-height: 250mm !important;
+        margin: 0 !important; padding: 6mm !important; background: #fff !important;
+        box-shadow: none !important; overflow: hidden !important;
+        page-break-after: avoid !important; page-break-inside: avoid !important;
+      }
+      .button { display: none !important;}
+    }
+  </style>
+</head>
+<body>
+  <div class="b5-preview" id="form-container">
+    <h2>出荷検査成績書</h2>
+    <table style="margin-bottom:4mm;">
+  <tr>
+    <td class="section-label" style="width:20mm;">客先</td>
+    <td style="width:55mm;">オークマ株式会社</td>
+    <td class="section-label" style="width:18mm;">発行NO.</td>
+    <td style="width:28mm;">TTS60-01-460</td>
+    <td class="section-label" style="width:18mm;">発行年月日</td>
+    <td style="width:25mm;">2025年1月31日</td>
+  </tr>
+  <tr>
+    <td class="section-label">機種</td>
+    <td>
+      <select name="kisyuu">
+        <option value="MB-46V">MB-46V</option>
+        <option value="MB-56V">MB-56V</option>
+        <option value="MB-66V">MB-66V</option>
+      </select>
+    </td>
+    <td class="section-label">品番</td>
+    <td>H1090-0021-02-5</td>
+    <td class="section-label">図番</td>
+    <td>
+      <select name="zuban">
+        <option value="2825-20">2825-20</option>
+        <option value="2835-20">2835-20</option>
+      </select>
+    </td>
+  </tr>
+  <tr>
+    <td class="section-label">品名</td>
+    <td>Y軸SG</td>
+    <td class="section-label">製造日</td>
+    <td>2025年1月31日</td>
+    <td class="section-label">製造NO</td>
+    <td>Y282520-2245</td>
+  </tr>
+  <tr>
+    <td class="section-label">オーダーNo</td>
+    <td colspan="5">102P068219-001</td>
+  </tr>
+</table>
+    <table>
+      <!-- Header utama -->
+      <tr>
+        <th style="width:50mm;">検査項目</th>
+        <th style="width:65mm;">規格</th>
+        <th style="width:25mm;">判定</th>
+      </tr>
+      <!-- Visual Check -->
+      <tr>
+        <td>本体取付け付け方法</td>
+        <td>組立架台取付合わせ確認</td>
+        <td>
+          <select name="judge1"><option value="合">合</option><option value="否">否</option></select>
+        </td>
+      </tr>
+      <tr>
+        <td>摺動テスト</td>
+        <td>摺動テスト台走り・機能確認</td>
+        <td>
+          <select name="judge2"><option value="合">合</option><option value="否">否</option></select>
+        </td>
+      </tr>
+      <tr>
+        <td>摺動時の異音</td>
+        <td>摺動テスト台走り時異音の有無確認</td>
+        <td>
+          <select name="judge3"><option value="有">有</option><option value="無">無</option></select>
+        </td>
+      </tr>
+      <tr>
+        <td>外観検査</td>
+        <td>キズ・バリの有無確認</td>
+        <td>
+          <select name="judge4"><option value="合">合</option><option value="否">否</option></select>
+        </td>
+      </tr>
+      <tr>
+        <td>カバーワイパーの除隅</td>
+        <td>ワイパー材 t=0.05にて確認</td>
+        <td>
+          <select name="judge5"><option value="合">合</option><option value="否">否</option></select>
+        </td>
+      </tr>
+      <!-- Sub header untuk 測定項目 -->
+      <tr>
+        <th colspan="3" style="background:#f8f8f8; text-align:left;">測定項目</th>
+      </tr>
+      <tr>
+        <th>項目</th>
+        <th>基準値</th>
+        <th>測定値</th>
+      </tr>
+      <!-- Data untuk 測定項目 -->
+      <tr>
+        <td>収縮時長さ(a)</td>
+        <td>190mm以下</td>
+        <td>
+          <div class="td-flex">
+            <input type="number" step="any" name="a_length" value="">
+            <span class="unit-span">mm</span>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>伸長時長さ(b)</td>
+        <td>670mm以上</td>
+        <td>
+          <div class="td-flex">
+            <input type="number" step="any" name="b_length" value="">
+            <span class="unit-span">mm</span>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>カバーストローク(s)</td>
+        <td>480mm以上</td>
+        <td>
+          <div class="td-flex">
+            <input type="number" step="any" name="s_stroke" value="">
+            <span class="unit-span">mm</span>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>初期摺動抵抗</td>
+        <td>4.0kg以下</td>
+        <td>
+          <div class="td-flex">
+            <input type="number" step="any" name="start_resist" value="">
+            <span class="unit-span">kg</span>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>中期摺動抵抗</td>
+        <td>4.0kg以下</td>
+        <td>
+          <div class="td-flex">
+            <input type="number" step="any" name="mid_resist" value="">
+            <span class="unit-span">kg</span>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>終期摺動抵抗</td>
+        <td>4.0kg以下</td>
+        <td>
+          <div class="td-flex">
+            <input type="number" step="any" name="end_resist" value="">
+            <span class="unit-span">kg</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+    <div style="margin-top:2mm;">
+      <label style="font-weight:bold;">総合判定</label>
+      <select name="final_judgment">
+        <option value="合">合</option>
+        <option value="否">否</option>
+      </select>
+    </div>
+    <div style="margin:2mm 0;">
+      <label style="font-weight:bold;">[備考]</label>
+      <input type="text" name="bikou" style="width:70%;" placeholder="例：2821-200の追加加工">
+    </div>
+    <button type="button" class="button" onclick="window.print()">印刷 / PDF保存</button>
+    <div class="footer">
+      東京精密発條株式会社
+      <div class="stamp-box-row">
+        <div>
+          <div style="text-align:center; font-size:2.7mm; margin-bottom:0.5mm;">検印</div>
+          <div class="signature-wrap" id="signatureWrap1">
+            <canvas id="signaturePad1" class="signature-canvas"></canvas>
+            <span class="signature-label" id="signatureLabel1">署名</span>
+          </div>
+          <div class="signature-actions">
+            <button type="button" onclick="resizeSignatureCanvas('signaturePad1','signatureLabel1')">クリア</button>
+          </div>
+        </div>
+        <div>
+          <div style="text-align:center; font-size:2.7mm; margin-bottom:0.5mm;">検査印</div>
+          <div class="signature-wrap" id="signatureWrap2">
+            <canvas id="signaturePad2" class="signature-canvas"></canvas>
+            <span class="signature-label" id="signatureLabel2">署名</span>
+          </div>
+          <div class="signature-actions">
+            <button type="button" onclick="resizeSignatureCanvas('signaturePad2','signatureLabel2')">クリア</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Script signature pad, support 2 signature fields
+    function resizeSignatureCanvas(canvasId, labelId) {
+      const canvas = document.getElementById(canvasId);
+      const label = document.getElementById(labelId);
+      const pxPerMM = 3.78;
+      const widthMM = 20, heightMM = 20;
+      const ratio = window.devicePixelRatio || 1;
+      const width = widthMM * pxPerMM, height = heightMM * pxPerMM;
+      canvas.width = width * ratio;
+      canvas.height = height * ratio;
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      label.style.display = "";
+    }
+    function setupSignaturePad(canvasId, labelId) {
+      const canvas = document.getElementById(canvasId);
+      const label = document.getElementById(labelId);
+      let drawing = false, lastX = 0, lastY = 0;
+      function getXY(e) {
+        const rect = canvas.getBoundingClientRect();
+        if (e.touches && e.touches.length > 0) {
+          return [
+            (e.touches[0].clientX - rect.left) * (canvas.width / canvas.offsetWidth),
+            (e.touches[0].clientY - rect.top) * (canvas.height / canvas.offsetHeight)
+          ];
+        } else {
+          return [
+            (e.clientX - rect.left) * (canvas.width / canvas.offsetWidth),
+            (e.clientY - rect.top) * (canvas.height / canvas.offsetHeight)
+          ];
+        }
+      }
+      canvas.addEventListener('mousedown', function(e){ drawing=true; [lastX,lastY]=getXY(e); label.style.display="none"; });
+      canvas.addEventListener('touchstart', function(e){ drawing=true; [lastX,lastY]=getXY(e); label.style.display="none"; });
+      canvas.addEventListener('mousemove', function(e){
+        if(!drawing) return;
+        const ctx = canvas.getContext("2d");
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "#1a1a1a";
+        ctx.beginPath();
+        ctx.moveTo(lastX,lastY);
+        const [x,y]=getXY(e);
+        ctx.lineTo(x,y);
+        ctx.stroke();
+        [lastX,lastY]=[x,y];
+      });
+      canvas.addEventListener('touchmove', function(e){ 
+        if(!drawing) return;
+        const ctx = canvas.getContext("2d");
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "#1a1a1a";
+        ctx.beginPath();
+        ctx.moveTo(lastX,lastY);
+        const [x,y]=getXY(e);
+        ctx.lineTo(x,y);
+        ctx.stroke();
+        [lastX,lastY]=[x,y];
+        e.preventDefault();
+      }, {passive:false});
+      canvas.addEventListener('mouseup', function(){drawing=false;});
+      canvas.addEventListener('mouseleave', function(){drawing=false;});
+      canvas.addEventListener('touchend', function(){drawing=false;});
+    }
+    window.addEventListener('DOMContentLoaded', function(){
+      resizeSignatureCanvas('signaturePad1','signatureLabel1');
+      resizeSignatureCanvas('signaturePad2','signatureLabel2');
+      setupSignaturePad('signaturePad1','signatureLabel1');
+      setupSignaturePad('signaturePad2','signatureLabel2');
+    });
+    window.addEventListener('resize', function(){
+      resizeSignatureCanvas('signaturePad1','signatureLabel1');
+      resizeSignatureCanvas('signaturePad2','signatureLabel2');
+    });
+  </script>
+</body>
+</html>
