@@ -1,392 +1,416 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>出荷検査成績書フォーム</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <style>
-    :root {
-      --b5-width-mm: 176mm;
-      --b5-height-mm: 250mm;
-      --padding-mm: 6mm;
-      --font-size-mm: 3.1mm;
-    }
-    html, body {
-      background: #e7e7e7;
-      margin: 0;
-      padding: 0;
-      font-family: 'Arial', sans-serif;
-      font-size: var(--font-size-mm);
-    }
-    .b5-preview {
-      background: #fff;
-      margin: 10mm auto;
-      box-shadow: 0 0 5mm #bbb;
-      width: var(--b5-width-mm);
-      min-height: var(--b5-height-mm);
-      max-width: 100vw;
-      padding: var(--padding-mm);
-      box-sizing: border-box;
-      position: relative;
-      overflow: hidden;
-      page-break-after: avoid;
-      page-break-inside: avoid;
-    }
-    h2 { text-align: center; margin: 0 0 5mm 0; font-size: 4mm;}
-    table { border-collapse: collapse; width: 100%; margin-bottom: 3mm;}
-    th, td {
-      border: 0.3mm solid #333;
-      padding: 1.1mm;
-      text-align: center;
-      font-size: var(--font-size-mm);
-    }
-    th { background: #f0f0f0; }
-    input, select {
-      box-sizing: border-box;
-      font-size: var(--font-size-mm);
-      padding: 0.5mm;
-    }
-    .button { margin: 2mm 0; padding: 2mm 7mm; font-size: 3mm; }
-    .header-table { width: 100%; margin-bottom: 2.5mm; border: none;}
-    .header-table td { border: none; padding: 0 1mm 0 0; }
-    .onchuu { font-size: 3mm; margin-left: 1mm;}
-    .footer { text-align: right; margin-top: 3mm; font-size: 3mm;}
-    .stamp-box-container { text-align: right; margin-top: 1mm;}
-    .signature-wrap {
-      display: inline-block;
-      width: 30mm; height: 30mm;
-      min-width: 30mm; min-height: 30mm;
-      max-width: 30mm; max-height: 30mm;
-      border: 0.5mm solid #333;
-      border-radius: 2mm;
-      background: #fafbfc;
-      margin-top: 1mm;
-      margin-right: 0;
-      position: relative;
-      box-sizing: border-box;
-      text-align: center;
-      vertical-align: top;
-    }
-    .signature-label {
-      font-size: 2.2mm;
-      color: #888;
-      position: absolute;
-      left: 0; top: 0; width: 100%; height: 100%;
-      display: flex; justify-content: center; align-items: center;
-      pointer-events: none;
-      z-index: 1;
-    }
-    .signature-canvas {
-      width: 100%; height: 100%;
-      background: transparent;
-      display: block;
-      border-radius: 2mm;
-      z-index: 2;
-      touch-action: none;
-    }
-    .signature-actions {
-      margin-top: 1mm;
-      text-align: right;
-    }
-    .signature-actions button {
-      font-size: 2.2mm;
-      padding: 0.5mm 4mm;
-      border-radius: 2mm;
-      border: 0.3mm solid #bbb;
-      background: #f8f8f8;
-      cursor: pointer;
-      transition: background .2s;
-      margin-left: 1mm;
-    }
-    .signature-actions button:hover {
-      background: #e3e3e3;
-    }
-    .td-flex {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 1mm;
-      width: 100%;
-    }
-    .td-flex input[type="number"] {
-      width: 60%;
-      min-width: 11mm;
-      max-width: 22mm;
-      text-align: right;
-    }
-    .unit-span {
-      min-width: 7mm;
-      text-align: right;
-      font-size: var(--font-size-mm);
-      margin-left: 1mm;
-    }
-    /* Prevent table and content break in print */
-    .b5-preview, .b5-preview *, table, tr, td, th, form {
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
-    }
-    @media (max-width: 700px) {
-      .b5-preview {
-        width: 98vw !important;
-        min-width: unset;
-        max-width: 100vw;
-        padding: 2vw;
-        font-size: 4vw;
-      }
-      .signature-wrap {
-        width: 36vw;
-        height: 36vw;
-        min-width: 60px; min-height: 60px;
-        max-width: 98vw; max-height: 98vw;
-      }
-    }
-    @media print {
-      @page { size: B5 portrait; margin: 0; }
-      body, html { background: none !important; }
-      .b5-preview {
-        box-shadow: none !important;
-        margin: 0 !important;
-        width: 176mm !important;
-        min-height: 250mm !important;
-        max-height: 250mm !important;
-        padding: 6mm !important;
-        background: #fff !important;
-        overflow: hidden !important;
-        page-break-after: avoid !important;
-        page-break-inside: avoid !important;
-      }
-      .button, .signature-actions { display: none !important; }
-      .signature-wrap { border: 0.5mm solid #222; background: none !important;}
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>品質管理生産技術システム</title>
+<link rel="stylesheet" href="./assets/ui.css">
 </head>
 <body>
-  
-  <div class="b5-preview" id="form-container">
-    <h2>出荷検査成績書</h2>
-    <table class="header-table">
-      <tr>
-        <td style="width: 25%;">お客様名</td>
-        <td style="width: 45%;">
-          <input type="text" name="customer_name" id="customer_name" placeholder="例: 中村留精密工業株式会社">
-        </td>
-        <td style="width: 10%;" class="onchuu">御中</td>
-        <td></td>
-      </tr>
-    </table>
-    <form id="inspection-form" autocomplete="off">
-      <table>
-        <tr>
-          <td>機種</td>
-          <td><input type="text" name="kisyuu" value="0"></td>
-          <td>品番</td>
-          <td><input type="text" name="hinban" value="0*0"></td>
-          <td>図番</td>
-          <td><input type="text" name="zuban" value="0"></td>
-        </tr>
-        <tr>
-          <td>品名</td>
-          <td colspan="3"><input type="text" name="hinmei" value="X"></td>
-          <td>製造日</td>
-          <td><input type="date" name="seizoubi"></td>
-        </tr>
-        <tr>
-          <td>発行NO.</td>
-          <td><input type="text" name="hakko_no" value="0"></td>
-          <td>製造NO.</td>
-          <td><input type="text" name="seizou_no" value="0"></td>
-          <td>発行年月日</td>
-          <td><input type="date" name="hakkou_date"></td>
-        </tr>
-      </table>
-      <table>
-        <tr>
-          <th>検査項目</th>
-          <th>規格</th>
-          <th>判定</th>
-        </tr>
-        <tr>
-          <td>本体取付け付け法</td>
-          <td>本体取付け付け法測定確認</td>
-          <td>
-            <select name="hontai_kakunin">
-              <option value="合">合</option>
-              <option value="否">否</option>
-            </select>
-          </td>
-        </tr>
-        <tr>
-          <td>揺動テスト</td>
-          <td>揺動テスト走り・機能確認</td>
-          <td>
-            <select name="yudo_test">
-              <option value="合">合</option>
-              <option value="否">否</option>
-            </select>
-          </td>
-        </tr>
-        <tr>
-          <td>揺動時の音</td>
-          <td>揺動テスト走り時異音の有無確認</td>
-          <td>
-            <select name="yudo_oto">
-              <option value="合">合</option>
-              <option value="否">否</option>
-            </select>
-          </td>
-        </tr>
-        <tr>
-          <td>外観検査</td>
-          <td>キズ・バリの有無目視確認</td>
-          <td>
-            <select name="gaikan">
-              <option value="合">合</option>
-              <option value="否">否</option>
-            </select>
-          </td>
-        </tr>
-        <tr>
-          <td>ワイパーの隙間</td>
-          <td>ワイパー材 t=0.05にて隙間確認</td>
-          <td>
-            <select name="wiper">
-              <option value="合">合</option>
-              <option value="否">否</option>
-            </select>
-          </td>
-        </tr>
-        <tr>
-          <th>項目</th>
-          <th>基準値</th>
-          <th>測定値</th>
-        </tr>
-        <tr>
-          <td>X ストローク(MAX)</td>
-          <td>153.6mm以上</td>
-          <td>
-            <div class="td-flex">
-              <input type="number" step="any" name="x_max">
-              <span class="unit-span">mm</span>
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <td>Y ストローク(MAX)</td>
-          <td>74mm以上</td>
-          <td>
-            <div class="td-flex">
-              <input type="number" step="any" name="y_max">
-              <span class="unit-span">mm</span>
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <td>初期揺動抵抗</td>
-          <td>5.0kg以下</td>
-          <td>
-            <div class="td-flex">
-              <input type="number" step="any" name="shoki_yudo">
-              <span class="unit-span">kg</span>
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <td>中期揺動抵抗</td>
-          <td>5.0kg以下</td>
-          <td>
-            <div class="td-flex">
-              <input type="number" step="any" name="chuki_yudo">
-              <span class="unit-span">kg</span>
-            </div>
-          </td>
-        </tr>
-      </table>
-      <div>
-        <label>総合判定</label>
-        <select name="final_judgment">
-          <option value="合">合</option>
-          <option value="否">否</option>
-        </select>
-      </div>
-      <div style="margin:2mm 0;">
-        <label>[備考]</label>
-        <input type="text" name="bikou" style="width:70%;">
-      </div>
-      <button type="button" class="button" onclick="window.print()">印刷/保存 PDF</button>
-    </form>
-    <div class="footer">
-      東京精密発條株式会社
-      <div class="stamp-box-container">
-        <div class="signature-wrap" id="signatureWrap">
-          <canvas id="signaturePad" class="signature-canvas"></canvas>
-          <span class="signature-label" id="signatureLabel">署名してください</span>
-        </div>
-        <div class="signature-actions">
-          <button type="button" onclick="clearSignature()">クリア</button>
-        </div>
-      </div>
+<header>
+  <div class="wrap">
+    <div class="hstack">
+      <img src="tsh.png" alt="TSH" style="height:36px">
+      <strong>品質管理生産技術</strong>
+    </div>
+    <nav class="nav">
+      <a href="./index.html"><strong>ホーム</strong></a>
+      <a href="./position.html">ポジション</a>
+      <a href="./item.html">タイムライン</a>
+      <a href="./inventory.html">在庫</a>
+      <a href="./receive.html">受入</a>
+      <a href="./issue.html">払出</a>
+    </nav>
+    <div class="hstack">
+      <button id="btnRefresh" class="btn">Refresh</button>
+      <button id="btnLive" class="btn">Live</button>
+      <span id="intervalInfo" class="badge">60s</span>
+      <button id="btnScan" class="btn">Scan</button>
+      <button id="btnManual" class="btn">Input</button>
     </div>
   </div>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const today = new Date().toISOString().substr(0, 10);
-      var sei = document.querySelector('input[name="seizoubi"]');
-      var hak = document.querySelector('input[name="hakkou_date"]');
-      if(sei) sei.value = today;
-      if(hak) hak.value = today;
-      resizeSignatureCanvas();
-    });
+</header>
 
-    // Signature Pad
-    const canvas = document.getElementById('signaturePad');
-    const label = document.getElementById('signatureLabel');
-    function resizeSignatureCanvas() {
-      const pxPerMM = 3.78;
-      const widthMM = 30, heightMM = 30;
-      const ratio = window.devicePixelRatio || 1;
-      const width = widthMM * pxPerMM, height = heightMM * pxPerMM;
-      canvas.width = width * ratio;
-      canvas.height = height * ratio;
-      canvas.style.width = width + "px";
-      canvas.style.height = height + "px";
-      const ctx = canvas.getContext("2d");
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      label.style.display = "";
+<main style="max-width:1200px;margin:28px auto;padding:0 20px">
+  <div id="urgent-banner" class="card" style="background:#b91c1c;color:#fff;font-weight:bold">現在、至急案件はありません。</div>
+
+  <section class="card" id="processBoard" style="margin-top:16px">
+    <div class="hstack" style="justify-content:space-between">
+      <h2 style="margin:0">工程進捗（最新スキャン基準）</h2>
+      <span class="badge small">最新件数</span>
+    </div>
+    <div class="hstack" id="procPills" style="margin-top:8px;flex-wrap:wrap"></div>
+    <div class="small" id="procHint" style="color:#64748b;margin-top:8px"></div>
+  </section>
+
+  <section id="todaySection" class="card" style="display:none;margin-top:16px">
+    <div class="hstack" style="justify-content:space-between">
+      <h2 style="margin:0">本日出荷</h2>
+      <span class="badge"><span>件数</span><strong id="todayCount">0</strong></span>
+    </div>
+    <table id="todayTable" class="table"><thead><tr id="todayHead"></tr></thead><tbody id="todayBody"></tbody></table>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <div class="hstack" style="justify-content:space-between">
+      <h2 style="margin:0">全件一覧</h2>
+      <div class="hstack">
+        <label>出荷日：</label>
+        <input type="date" id="filterDate">
+        <button class="btn" id="btnToday">本日出荷のみ</button>
+        <button class="btn" id="btnClear">Clear</button>
+        <button class="btn" id="btnExcel">Export Excel</button>
+      </div>
+    </div>
+    <table id="shipTable" class="table"><thead><tr id="shipHead"></tr></thead><tbody id="shipBody"></tbody></table>
+    <div class="small" id="shipHint" style="color:#64748b"></div>
+  </section>
+</main>
+
+<div class="footer">Design by Wahyu</div>
+
+<!-- Libraries -->
+<script src="./assets/config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://unpkg.com/@zxing/browser@latest"></script>
+
+<script>
+// ===== Config shortcuts =====
+const SHEET_ID = APP.SHEET_ID, TAB_NAME = APP.TAB_MASTER;
+const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(TAB_NAME)}`;
+const LOG_CSV  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(APP.TAB_LOG)}`;
+const LOG_API  = APP.LOG_API, LOG_TOKEN = APP.LOG_TOKEN, CURRENT_USER = APP.CURRENT_USER;
+const S = s => String(s ?? '').trim();
+
+// ===== CSV parser =====
+function parseCSV(t){
+  const rows=[], re=/\s*("(?:[^"]|"")*"|[^,]*)\s*(,|\n|$)/g; let m, row=[];
+  t=t.replace(/\r\n?/g,"\n");
+  for(let i=0;i<t.length;){ re.lastIndex=i; m=re.exec(t); if(!m) break;
+    let cell=m[1]; if(cell.startsWith('"')) cell=cell.slice(1,-1).replace(/""/g,'"');
+    row.push(cell); i=re.lastIndex; if(m[2]==="\n"||m[2]===""){ rows.push(row); row=[]; } }
+  return rows.filter(r=>r.length && r.some(c=>S(c)!==""));
+}
+
+// ===== Header indexer =====
+function indexByName(header){
+  const map={}; header.forEach((h,i)=>map[S(h)]=i);
+  const find=names=>{for(const n of names){if(n in map) return map[n];} return null;};
+  const findFuzzy=rx=>{for(let i=0;i<header.length;i++){ if(rx.test(S(header[i]))) return i; } return null;};
+  return {
+    date:find(["出荷日","日付","Date"]),
+    cust:find(["顧客名","客先","Customer"]),
+    draw:find(["図番","Drawing","図面"]),
+    item:find(["商品名","品名","Item"]),
+    machine:find(["機種","機種名","Machine"]),
+    qty:find(["数量","Qty"]),
+    to:find(["送り先","納品先","送付先"]),
+    note:find(["注番","注文番号","備考","注文","Order","注釈"]),
+    status_done:find(["製品状況","製品状態","納品状況"]) ?? findFuzzy(/(製品|納品).*(状況|状態)/),
+    status_flag:find(["Status","ステータス","状態","至急"]) ?? findFuzzy(/status|至急/i),
+  };
+}
+const valAt = (row, idx) => (idx==null ? "" : (row[idx] ?? ""));
+
+// ===== Date helpers =====
+function parseJPDate(str){
+  const s=S(str); const mJP=s.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+  if(mJP) return new Date(mJP[1], mJP[2]-1, mJP[3]);
+  const parts=s.replaceAll('-','/').split('/'); if(parts.length===3) return new Date(parts[0], parts[1]-1, parts[2]);
+  const d=new Date(s); return isNaN(d)?null:d;
+}
+function sameYMD(a,b){ return a&&b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function toInputDate(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
+function isUrgent(v){ const t=S(v).toLowerCase(); return t==="至急"||t==="urgent"||t==="緊急"||t==="1"||t==="true"; }
+
+// ===== Status badge =====
+function getStatusFromValue(val){
+  const raw=S(val), t=raw.replace(/\s/g,'').toLowerCase();
+  if(!t || /(未|clear)/.test(t)) return {label:'未組立', cls:'tag-not'};
+  if(/(検査済み|済|完了|ok|done)/.test(t)) return {label:'済', cls:'tag-done'};
+  if(/(組立完了)/.test(raw)) return {label:'組立完了', cls:'tag-assem-done'};
+  if(/(検査中|検中)/.test(raw)) return {label:'検査中', cls:'tag-inspect'};
+  if(/(組立中|組中)/.test(raw)) return {label:'組立中', cls:'tag-assem'};
+  if(/検/.test(raw)) return {label:'検査中', cls:'tag-inspect'};
+  if(/組/.test(raw)) return {label:'組立中', cls:'tag-assem'};
+  return null;
+}
+function makeComparator(idx){
+  const rank=s=>({'検査中':1,'組立中':2,'未組立':3,'組立完了':4,'済':5}[s]??99);
+  return (a,b)=>{
+    const au=idx.status_flag!=null && isUrgent(valAt(a, idx.status_flag));
+    const bu=idx.status_flag!=null && isUrgent(valAt(b, idx.status_flag));
+    if(au!==bu) return au?-1:1;
+    const sa=idx.status_done!=null?(getStatusFromValue(valAt(a, idx.status_done))?.label):null;
+    const sb=idx.status_done!=null?(getStatusFromValue(valAt(b, idx.status_done))?.label):null;
+    if(rank(sa)!==rank(sb)) return rank(sa)-rank(sb);
+    const da=idx.date!=null?parseJPDate(valAt(a, idx.date)):null;
+    const db=idx.date!=null?parseJPDate(valAt(b, idx.date)):null;
+    return (db?db.getTime():-Infinity)-(da?da.getTime():-Infinity);
+  };
+}
+
+// ===== Scan log latest map =====
+async function fetchScanMap(){
+  try{
+    const res = await fetch(LOG_CSV + "&_ts=" + Date.now(), {cache:'no-store'});
+    if(!res.ok){ return {map:{}, stats:{}}; }
+    const text=await res.text(); const rows=parseCSV(text);
+    if(rows.length<2) return {map:{}, stats:{}};
+    const header=rows[0].map(S);
+    const idx={ ts:header.indexOf('ts'), id:header.indexOf('item_id'), ev:header.indexOf('event'), loc:header.indexOf('location') };
+    const map={}, statsEvent={}, statsLoc={};
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i], id=S(r[idx.id]); const ts=new Date(S(r[idx.ts])||0).getTime(); if(!id||!ts) continue;
+      const ev=S(r[idx.ev]), loc=S(r[idx.loc]);
+      if(!map[id] || ts > map[id].ts){ map[id]={ts, event:ev, location:loc}; }
+      statsEvent[ev]=(statsEvent[ev]||0)+1;
     }
-    window.addEventListener('resize', resizeSignatureCanvas);
-    let drawing = false, lastX = 0, lastY = 0;
-    function startDraw(e) {
-      drawing = true;
-      [lastX, lastY] = getXY(e);
-      label.style.display = "none";
+    Object.values(map).forEach(({event, location})=>{
+      statsLoc[location||'-']=(statsLoc[location||'-']||0)+1;
+      statsEvent[event||'-']=statsEvent[event||'-']||0;
+    });
+    return {map, stats:{event:statsEvent, location:statsLoc, total:Object.keys(map).length}};
+  }catch(e){ console.warn('fetchScanMap', e); return {map:{}, stats:{}}; }
+}
+
+// ===== Rendering =====
+function renderTable(header, idx, rows, tbodyEl, headEl, latestMap){
+  const extHeader=[...header,'最新イベント','現在位置'];
+  headEl.innerHTML = extHeader.map(h=>`<th>${h}</th>`).join('');
+  tbodyEl.innerHTML = '';
+
+  rows.forEach(r=>{
+    const rowUrg=idx.status_flag!=null?isUrgent(valAt(r, idx.status_flag)):false;
+    const tds=header.map((_,i)=>`<td>${S(r[i])}</td>`);
+    // Link ID → timeline (pakai 図番; kalau kunci utama 注番, ganti idx.draw → idx.note)
+    if(idx.draw!=null){
+      const rawId=S(valAt(r, idx.draw));
+      if(rawId) tds[idx.draw]=`<td><a href="./item.html?id=${encodeURIComponent(rawId)}" style="color:#2563eb;text-decoration:none">${rawId}</a></td>`;
     }
-    function endDraw(e) { drawing = false; }
-    function draw(e) {
-      if (!drawing) return;
-      const ctx = canvas.getContext("2d");
-      ctx.lineWidth = 2.2;
-      ctx.lineCap = "round";
-      ctx.strokeStyle = "#1a1a1a";
-      ctx.beginPath();
-      ctx.moveTo(lastX, lastY);
-      const [x, y] = getXY(e);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-      [lastX, lastY] = [x, y];
+    const dateCol=idx.date!=null?idx.date:0;
+    const d=idx.date!=null?parseJPDate(valAt(r, idx.date)):null;
+    const dateText=d?toInputDate(d):S(r[dateCol]||'');
+    const statusObj=idx.status_done!=null?getStatusFromValue(valAt(r, idx.status_done)):null;
+    const urgentFlag=rowUrg?`<span class="pill" style="background:#dc2626;color:#fff">至急</span>`:'';
+    const badge=statusObj?`<span class="pill">${statusObj.label}</span>`:'';
+    tds[dateCol]=`<td>${urgentFlag} ${badge} ${dateText}</td>`;
+
+    const itemKey = S(valAt(r, idx.draw) || valAt(r, idx.item) || valAt(r, idx.note)); // ubah urutan jika kunci utama ≠ 図番
+    const latest = latestMap[itemKey];
+    tds.push(`<td>${latest?S(latest.event):'-'}</td>`);
+    tds.push(`<td>${latest?S(latest.location):'-'}</td>`);
+    tbodyEl.insertAdjacentHTML('beforeend', `<tr>${tds.join('')}</tr>`);
+  });
+}
+
+function renderProcessBoard(stats){
+  const box=document.getElementById('procPills'), hint=document.getElementById('procHint'); box.innerHTML='';
+  if(!stats||!stats.event){ hint.textContent='スキャンデータがありません。'; return; }
+  ['RECEIVE','WIP','QC','PACK','SHIP'].forEach(k=>{
+    const v=stats.event[k]||0; box.insertAdjacentHTML('beforeend', `<div class="pill">${k} ${v}</div>`);
+  });
+  const locPairs=Object.entries(stats.location||{}).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  locPairs.forEach(([loc,c])=> box.insertAdjacentHTML('beforeend', `<div class="pill">LOC ${loc}: ${c}</div>`));
+  hint.textContent = `最新：アイテム数 ${stats.total ?? 0}`;
+}
+
+// ===== Main loader =====
+let aborter=null, isLoading=false;
+let cached={header:[], rows:[], idx:null, cmp:null};
+let _scanData={map:{}, stats:{}};
+
+async function load(){
+  try{
+    if(isLoading){ if(aborter) aborter.abort(); }
+    isLoading=true; const btn=document.getElementById('btnRefresh'); const old=btn.textContent;
+    btn.textContent='Loading...'; btn.disabled=true;
+
+    aborter=new AbortController();
+    const res=await fetch(CSV_URL + "&_ts=" + Date.now(), {signal:aborter.signal, cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const text=await res.text(); const data=parseCSV(text); if(!data.length) throw new Error('CSV empty');
+
+    const header=data[0], rowsRaw=data.slice(1); const idx=indexByName(header); const cmp=makeComparator(idx);
+    const rows=[...rowsRaw].sort(cmp); cached={header, rows, idx, cmp};
+
+    _scanData = await fetchScanMap();
+
+    const urgentCount = rows.reduce((n,r)=> n + (idx.status_flag!=null && isUrgent(valAt(r, idx.status_flag)) ? 1 : 0), 0);
+    document.getElementById('urgent-banner').textContent =
+      urgentCount>0 ? `⚠ 至急案件が ${urgentCount} 件あります！早急に確認してください。` : '現在、至急案件はありません。';
+
+    renderProcessBoard(_scanData.stats);
+    renderTodaySection();
+    applyFilter(null);
+
+    const cols=[]; if(idx.qty!=null) cols.push('数量:'+header[idx.qty]); if(idx.cust!=null) cols.push('顧客:'+header[idx.cust]); if(idx.date!=null) cols.push('出荷日:'+header[idx.date]);
+    document.getElementById('shipHint').textContent = `データ元: ${TAB_NAME}（${rows.length} 行）｜${cols.join(' ｜ ')} ｜ Urgent列: ${idx.status_flag!=null ? header[idx.status_flag] : '—'}`;
+    document.getElementById('filterDate').value = toInputDate(new Date());
+
+    btn.textContent=old; btn.disabled=false; isLoading=false;
+  }catch(e){
+    console.error(e);
+    const btn=document.getElementById('btnRefresh'); btn.textContent='Refresh now'; btn.disabled=false; isLoading=false;
+    document.getElementById('shipHint').textContent='読み込みに失敗しました。シート名/公開設定/列名をご確認ください。';
+  }
+}
+
+function renderTodaySection(){
+  const { header, rows, idx, cmp } = cached;
+  if(idx.date==null){ document.getElementById('todaySection').style.display='none'; return; }
+  const today = new Date();
+  const todayRows = rows.filter(r=>{ const d=parseJPDate(valAt(r, idx.date)); return d && sameYMD(d,today); }).sort(cmp);
+  const visible = todayRows.length>0;
+  document.getElementById('todaySection').style.display = visible ? '' : 'none';
+  if(!visible) return;
+  document.getElementById('todayCount').textContent = todayRows.length;
+  renderTable(header, idx, todayRows, document.getElementById('todayBody'), document.getElementById('todayHead'), _scanData.map);
+}
+
+// ===== Filter & export =====
+function applyFilter(dateStr){
+  const { header, rows, idx, cmp } = cached;
+  let view = rows;
+  if(idx.date!=null && dateStr){
+    const target=new Date(dateStr+"T00:00:00");
+    view = rows.filter(r=>{ const d=parseJPDate(valAt(r, idx.date)); return d && sameYMD(d,target); }).sort(cmp);
+  }
+  renderTable(header, idx, view, document.getElementById('shipBody'), document.getElementById('shipHead'), _scanData.map);
+}
+function exportExcel(){
+  const wb=XLSX.utils.table_to_book(document.getElementById("shipTable"),{sheet:"出荷状況"});
+  XLSX.writeFile(wb,"出荷状況.xlsx");
+}
+function exportPDF(){
+  const { jsPDF } = window.jspdf; const doc=new jsPDF({orientation:"landscape", unit:"pt", format:"a4"});
+  doc.setFontSize(14); doc.text("出荷状況一覧", 40, 40);
+  doc.autoTable({html:"#shipTable", startY:60, styles:{fontSize:9, cellPadding:4, halign:"center", valign:"middle"}, headStyles:{fillColor:[238,242,247]}});
+  doc.save("出荷状況.pdf");
+}
+
+// ===== Auto refresh =====
+let timer=null, intervalMs=60000;
+function startAutoRefresh(ms){
+  intervalMs=ms; clearInterval(timer);
+  timer=setInterval(()=>{ if(document.visibilityState==='visible') load(); }, intervalMs);
+  document.getElementById('intervalInfo').textContent = `${Math.round(intervalMs/1000)}s`;
+  const liveBtn=document.getElementById('btnLive');
+  if(intervalMs<=5000){ liveBtn.classList.add('primary'); liveBtn.textContent='Live: On'; }
+  else{ liveBtn.classList.remove('primary'); liveBtn.textContent='Live: Off'; }
+}
+
+// ===== Scanner modal =====
+let codeReader=null;
+const scanModal=document.createElement('div');
+scanModal.className='modal';
+scanModal.innerHTML=`<div class="box">
+  <div class="hstack" style="justify-content:space-between"><strong>スキャン</strong><button class="btn" id="scanClose">閉じる</button></div>
+  <div class="hstack" style="margin:8px 0">
+    <select id="scanEvent" class="btn">
+      <option value="RECEIVE">RECEIVE（受入）</option>
+      <option value="WIP">WIP（工程中）</option>
+      <option value="QC">QC（検査）</option>
+      <option value="PACK">PACK（梱包）</option>
+      <option value="SHIP">SHIP（出荷）</option>
+    </select>
+    <input id="scanLocation" class="btn" placeholder="Location 例: 倉庫A / 組立1 / 出荷ヤード">
+    <input id="scanNote" class="btn" placeholder="Note (任意)">
+  </div>
+  <video id="scanVideo" style="width:100%;border:1px solid #e5e7eb;border-radius:12px"></video>
+  <div id="scanHint" class="small" style="color:#64748b;margin-top:6px"></div>
+</div>`;
+document.body.appendChild(scanModal);
+
+async function openScanner(){
+  scanModal.style.display='flex';
+  if(!codeReader){ codeReader = new ZXingBrowser.BrowserMultiFormatReader(); }
+  const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
+  const deviceId = devices?.[0]?.deviceId;
+  document.getElementById('scanHint').textContent = devices.length ? 'カメラ初期化中…' : 'カメラが見つかりません';
+  if(!deviceId) return;
+  const scanVideo=document.getElementById('scanVideo');
+  await codeReader.decodeFromVideoDevice(deviceId, scanVideo, async (result, err, controls)=>{
+    if(result){
+      controls.stop();
+      const itemId=result.getText();
+      document.getElementById('scanHint').textContent=`読み取り: ${itemId} → 送信中…`;
+      try{
+        const payload={ token:LOG_TOKEN, action:'scan', item_id:itemId,
+          event:document.getElementById('scanEvent').value,
+          location:document.getElementById('scanLocation').value||'',
+          user:CURRENT_USER, note:document.getElementById('scanNote').value||'' };
+        const res=await fetch(LOG_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const j=await res.json().catch(()=>({ok:false,error:'Invalid JSON'}));
+        if(j.ok){ document.getElementById('scanHint').textContent='記録しました ✅'; await load(); setTimeout(closeScanner,600); }
+        else{ document.getElementById('scanHint').textContent='送信失敗: '+(j.error||res.status); }
+      }catch(e){ document.getElementById('scanHint').textContent='送信エラー: '+e.message; }
     }
-    function getXY(e) {
-      const rect = canvas.getBoundingClientRect();
-      if (e.touches && e.touches.length > 0) {
-        return [
-          (e.touches[0].clientX - rect.left) * (canvas.width / canvas.offsetWidth),
-          (e.touches[0].clientY - rect.top) * (canvas.height / canvas.offsetHeight)
-        ];
-      } else {
-        return [
-          (e.clientX - rect.left) * (canvas.width / canvas.offsetWidth),
-          (e.clientY - rect.top) * (canvas.height / canvas.offsetHeight)
-        ];
-      }
-    }
-    canvas.addEventListener('mousedown',
+  });
+}
+function closeScanner(){ scanModal.style.display='none'; try{ codeReader?.reset(); }catch(e){} }
+
+// ===== Manual input modal =====
+const manualModal=document.createElement('div');
+manualModal.className='modal';
+manualModal.innerHTML=`<div class="box">
+  <div class="hstack" style="justify-content:space-between"><strong>入力（手動）</strong><button class="btn" id="manualClose">閉じる</button></div>
+  <div class="hstack" style="flex-direction:column;align-items:stretch;margin:8px 0">
+    <input id="mItemId" placeholder="Item ID（図番/注番 等）" required>
+    <select id="mEvent" required>
+      <option value="">イベントを選択</option>
+      <option value="RECEIVE">RECEIVE（受入）</option>
+      <option value="WIP">WIP（工程中）</option>
+      <option value="QC">QC（検査）</option>
+      <option value="PACK">PACK（梱包）</option>
+      <option value="SHIP">SHIP（出荷）</option>
+    </select>
+    <input id="mLocation" placeholder="Location 例: 倉庫A / 組立1">
+    <input id="mNote" placeholder="Note (任意)">
+    <button class="btn primary" id="mSubmit">Submit</button>
+  </div>
+  <div id="mHint" class="small" style="color:#64748b"></div>
+</div>`;
+document.body.appendChild(manualModal);
+
+async function submitManual(){
+  const item_id=S(document.getElementById('mItemId').value);
+  const eventV=S(document.getElementById('mEvent').value);
+  const location=S(document.getElementById('mLocation').value);
+  const note=S(document.getElementById('mNote').value);
+  if(!item_id) return document.getElementById('mHint').textContent='Item ID は必須です。';
+  if(!eventV)  return document.getElementById('mHint').textContent='イベントを選択してください。';
+  document.getElementById('mHint').textContent='送信中…';
+  try{
+    const payload={ token:LOG_TOKEN, action:'scan', item_id, event:eventV, location, user:CURRENT_USER, note };
+    const res=await fetch(LOG_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const j=await res.json().catch(()=>({ok:false,error:'Invalid JSON'}));
+    if(j.ok){
+      document.getElementById('mHint').textContent='記録しました ✅';
+      await load(); setTimeout(()=>{ manualModal.style.display='none'; },600);
+      document.getElementById('mItemId').value=''; document.getElementById('mEvent').value='';
+      document.getElementById('mLocation').value=''; document.getElementById('mNote').value='';
+    } else document.getElementById('mHint').textContent='送信失敗: '+(j.error||res.status);
+  }catch(e){ document.getElementById('mHint').textContent='送信エラー: '+e.message; }
+}
+
+// ===== Events =====
+document.getElementById('btnRefresh').addEventListener('click', load);
+document.getElementById('btnLive').addEventListener('click', ()=>{ startAutoRefresh(intervalMs<=5000?60000:5000); load(); });
+document.getElementById('btnScan').addEventListener('click', openScanner);
+document.getElementById('btnExcel').addEventListener('click', exportExcel);
+document.getElementById('btnToday').addEventListener('click', ()=> applyFilter(toInputDate(new Date())));
+document.getElementById('btnClear').addEventListener('click', ()=>{ document.getElementById('filterDate').value=""; applyFilter(null); });
+document.getElementById('filterDate').addEventListener('change', e=> applyFilter(e.target.value||null));
+scanModal.addEventListener('click', e=>{ if(e.target===scanModal) closeScanner(); });
+scanModal.querySelector('#scanClose').addEventListener('click', closeScanner);
+manualModal.addEventListener('click', e=>{ if(e.target===manualModal) manualModal.style.display='none'; });
+manualModal.querySelector('#manualClose').addEventListener('click', ()=> manualModal.style.display='none');
+manualModal.querySelector('#mSubmit').addEventListener('click', submitManual);
+
+window.addEventListener('DOMContentLoaded', ()=>{ load(); startAutoRefresh(60000); });
+</script>
+</body>
+</html>
