@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>タイムライン | 品質管理生産技術</title>
+<link rel="stylesheet" href="./assets/ui.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <strong>タイムライン</strong>
+    <nav class="nav"><a href="./index.html">← ダッシュボード</a><a href="./position.html">ポジション</a></nav>
+    <div class="hstack"><button id="btnLive" class="btn">Live</button><span id="hint" class="badge">Live: Off</span></div>
+  </div>
+</header>
+
+<main style="max-width:1000px;margin:28px auto;padding:0 20px">
+  <section class="card">
+    <div class="hstack" style="justify-content:space-between">
+      <h2 id="title" style="margin:0">Item: -</h2>
+      <div class="hstack">
+        <button id="btnScan" class="btn">Scan</button>
+        <button id="btnManual" class="btn">Input</button>
+      </div>
+    </div>
+    <div id="last" class="small" style="color:#64748b;margin-top:6px"></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h3 style="margin:0 0 8px">履歴</h3>
+    <table class="table">
+      <thead><tr><th>時刻</th><th>イベント</th><th>位置</th><th>ユーザー</th><th>備考</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </section>
+</main>
+<div class="footer">Design by Wahyu</div>
+
+<script src="./assets/config.js"></script>
+<script src="https://unpkg.com/@zxing/browser@latest"></script>
+<script>
+const S=s=>String(s??'').trim();
+const CSV_LOG=`https://docs.google.com/spreadsheets/d/${APP.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(APP.TAB_LOG)}`;
+const LOG_API=APP.LOG_API, LOG_TOKEN=APP.LOG_TOKEN, CURRENT_USER=APP.CURRENT_USER;
+function parseCSV(t){const rows=[],re=/\s*("(?:[^"]|"")*"|[^,]*)\s*(,|\n|$)/g;let m,row=[];t=t.replace(/\r\n?/g,"\n");for(let i=0;i<t.length;){re.lastIndex=i;m=re.exec(t);if(!m)break;let c=m[1];if(c.startsWith('"'))c=c.slice(1,-1).replace(/""/g,'"');row.push(c);i=re.lastIndex;if(m[2]==="\n"||m[2]===""){rows.push(row);row=[]}}return rows.filter(r=>r.length&&r.some(c=>S(c)!==""))}
+const url = new URL(location.href); const ITEM_ID = S(url.searchParams.get('id')||'');
+document.getElementById('title').textContent = `Item: ${ITEM_ID||'-'}`;
+let live=false,timer=null;
+function setLive(v){live=v; document.getElementById('hint').textContent = v?'Live: On':'Live: Off'; if(timer)clearInterval(timer); if(v){timer=setInterval(()=>{if(document.visibilityState==='visible') load();},5000)}}
+async function load(){
+  const res=await fetch(CSV_LOG+"&_ts="+Date.now(),{cache:'no-store'}); if(!res.ok) return;
+  const t=await res.text(); const rows=parseCSV(t); const h=rows[0].map(S);
+  const i={ts:h.indexOf('ts'), id:h.indexOf('item_id'), ev:h.indexOf('event'), loc:h.indexOf('location'), user:h.indexOf('user'), note:h.indexOf('note')};
+  const list=[]; for(let k=1;k<rows.length;k++){ const r=rows[k]; if(S(r[i.id])===ITEM_ID){ list.push({ts:new Date(S(r[i.ts])||0), ev:S(r[i.ev]), loc:S(r[i.loc]), user:S(r[i.user]), note:S(r[i.note])}); } }
+  list.sort((a,b)=>b.ts.getTime()-a.ts.getTime());
+  const tb=document.getElementById('tb'); tb.innerHTML='';
+  list.forEach(x=> tb.insertAdjacentHTML('beforeend', `<tr><td>${x.ts.toLocaleString()}</td><td>${x.ev}</td><td>${x.loc}</td><td>${x.user}</td><td>${x.note}</td></tr>`));
+  const last=list[0]; document.getElementById('last').textContent = last?`最新: ${last.ev} @ ${last.loc} / ${last.ts.toLocaleString()}`:'ログがありません。';
+}
+let codeReader=null;
+const scanModal=document.createElement('div');
+scanModal.className='modal';
+scanModal.innerHTML=`<div class="box">
+  <div class="hstack" style="justify-content:space-between"><strong>スキャン</strong><button class="btn" id="scanClose">閉じる</button></div>
+  <div class="hstack" style="margin:8px 0">
+    <select id="scanEvent" class="btn"><option value="RECEIVE">RECEIVE</option><option value="WIP">WIP</option><option value="QC">QC</option><option value="PACK">PACK</option><option value="SHIP">SHIP</option></select>
+    <input id="scanLocation" class="btn" placeholder="Location">
+    <input id="scanNote" class="btn" placeholder="Note (任意)">
+  </div>
+  <video id="scanVideo" style="width:100%;border:1px solid #e5e7eb;border-radius:12px"></video>
+  <div id="scanHint" class="small" style="color:#64748b;margin-top:6px"></div>
+</div>`;
+document.body.appendChild(scanModal);
+
+async function openScanner(){
+  scanModal.style.display='flex';
+  if(!codeReader){ codeReader=new ZXingBrowser.BrowserMultiFormatReader(); }
+  const devices=await ZXingBrowser.BrowserCodeReader.listVideoInputDevices(); const deviceId=devices?.[0]?.deviceId;
+  document.getElementById('scanHint').textContent = devices.length?'カメラ初期化中…':'カメラが見つかりません';
+  if(!deviceId) return;
+  await codeReader.decodeFromVideoDevice(deviceId, document.getElementById('scanVideo'), async (result, err, controls)=>{
+    if(result){
+      controls.stop();
+      const itemId=result.getText();
+      document.getElementById('scanHint').textContent=`読み取り: ${itemId} → 送信中…`;
+      try{
+        const payload={ token:APP.LOG_TOKEN, action:'scan', item_id:itemId, event:document.getElementById('scanEvent').value, location:document.getElementById('scanLocation').value||'', user:APP.CURRENT_USER, note:document.getElementById('scanNote').value||'' };
+        const r=await fetch(APP.LOG_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j=await r.json().catch(()=>({ok:false}));
+        if(j.ok){ document.getElementById('scanHint').textContent='記録しました ✅'; await load(); setTimeout(()=>scanModal.style.display='none',600); } else { document.getElementById('scanHint').textContent='送信失敗'; }
+      }catch(e){ document.getElementById('scanHint').textContent='送信エラー: '+e.message; }
+    }
+  });
+}
+function closeScanner(){ scanModal.style.display='none'; try{codeReader?.reset();}catch(e){} }
+
+const manualModal=document.createElement('div');
+manualModal.className='modal';
+manualModal.innerHTML=`<div class="box">
+  <div class="hstack" style="justify-content:space-between"><strong>入力（手動）</strong><button class="btn" id="manualClose">閉じる</button></div>
+  <div class="hstack" style="flex-direction:column;align-items:stretch;margin:8px 0">
+    <input id="mItemId" placeholder="Item ID（図番/注番 等）" value="${ITEM_ID}">
+    <select id="mEvent"><option value="">イベントを選択</option><option>RECEIVE</option><option>WIP</option><option>QC</option><option>PACK</option><option>SHIP</option></select>
+    <input id="mLocation" placeholder="Location">
+    <input id="mNote" placeholder="Note (任意)">
+    <button class="btn" id="mSubmit">Submit</button>
+  </div>
+  <div id="mHint" class="small" style="color:#64748b"></div>
+</div>`;
+document.body.appendChild(manualModal);
+
+async function submitManual(){
+  const item_id=S(document.getElementById('mItemId').value), ev=S(document.getElementById('mEvent').value);
+  const location=S(document.getElementById('mLocation').value), note=S(document.getElementById('mNote').value);
+  if(!item_id) return document.getElementById('mHint').textContent='Item ID は必須です。';
+  if(!ev) return document.getElementById('mHint').textContent='イベントを選択してください。';
+  document.getElementById('mHint').textContent='送信中…';
+  try{
+    const payload={ token:LOG_TOKEN, action:'scan', item_id, event:ev, location, user:CURRENT_USER, note };
+    const r=await fetch(LOG_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j=await r.json().catch(()=>({ok:false}));
+    if(j.ok){ document.getElementById('mHint').textContent='記録しました ✅'; await load(); setTimeout(()=>manualModal.style.display='none',600); } else { document.getElementById('mHint').textContent='送信失敗'; }
+  }catch(e){ document.getElementById('mHint').textContent='送信エラー: '+e.message; }
+}
+
+// Events
+document.getElementById('btnLive').addEventListener('click', ()=> setLive(!live));
+document.getElementById('btnScan').addEventListener('click', openScanner);
+document.getElementById('btnManual').addEventListener('click', ()=> manualModal.style.display='flex');
+scanModal.addEventListener('click', e=>{ if(e.target===scanModal) closeScanner(); });
+scanModal.querySelector('#scanClose').addEventListener('click', closeScanner);
+manualModal.addEventListener('click', e=>{ if(e.target===manualModal) manualModal.style.display='none'; });
+manualModal.querySelector('#manualClose').addEventListener('click', ()=> manualModal.style.display='none');
+manualModal.querySelector('#mSubmit').addEventListener('click', submitManual);
+
+load();
+</script>
+</body>
+</html>
