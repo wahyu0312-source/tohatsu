@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>在庫一覧</title>
+<link rel="stylesheet" href="./assets/ui.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <strong>在庫一覧</strong>
+    <nav class="nav"><a href="./index.html">← ダッシュボード</a></nav>
+    <div class="hstack"><button id="btnExport" class="btn">Export Excel</button></div>
+  </div>
+</header>
+
+<main style="max-width:1200px;margin:28px auto;padding:0 20px">
+  <section class="card">
+    <div class="hstack" style="justify-content:space-between">
+      <div class="hstack">
+        <input id="q" placeholder="検索（品目/説明/ロケーション）">
+        <input id="fLoc" placeholder="Location filter">
+      </div>
+      <span id="hint" class="badge">-</span>
+    </div>
+    <table id="tbl" class="table">
+      <thead><tr><th>品目</th><th>説明</th><th>ロケーション</th><th>在庫</th><th>単位</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </section>
+</main>
+<div class="footer">Design by Wahyu</div>
+
+<script src="./assets/config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const S=s=>String(s??'').trim();
+const CSV_MOVES=`https://docs.google.com/spreadsheets/d/${APP.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(APP.TAB_MOVES)}`;
+const CSV_ITEMS=`https://docs.google.com/spreadsheets/d/${APP.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=master_items`;
+function parseCSV(t){const rows=[],re=/\s*("(?:[^"]|"")*"|[^,]*)\s*(,|\n|$)/g;let m,row=[];t=t.replace(/\r\n?/g,"\n");for(let i=0;i<t.length;){re.lastIndex=i;m=re.exec(t);if(!m)break;let c=m[1];if(c.startsWith('"'))c=c.slice(1,-1).replace(/""/g,'"');row.push(c);i=re.lastIndex;if(m[2]==="\n"||m[2]===""){rows.push(row);row=[]}}return rows.filter(r=>r.length&&r.some(c=>S(c)!==""))}
+let out=[];
+async function load(){
+  const [rm,ri]=await Promise.all([fetch(CSV_MOVES+"&_ts="+Date.now(),{cache:'no-store'}), fetch(CSV_ITEMS+"&_ts="+Date.now(),{cache:'no-store'})]);
+  if(!rm.ok){ document.getElementById('hint').textContent='読み込み失敗'; return; }
+  const [tm,ti]=await Promise.all([rm.text(),ri.ok?ri.text():'']);
+  const moves=parseCSV(tm), items=ri.ok?parseCSV(ti):null;
+  const hm=moves[0].map(S), im= items?items[0].map(S):null;
+  const i={ item:hm.indexOf('item_code'), in:hm.indexOf('qty_in'), out:hm.indexOf('qty_out'), src:hm.indexOf('src_loc'), dst:hm.indexOf('dst_loc'), unit:hm.indexOf('unit'), note:hm.indexOf('note')};
+  const descMap=new Map();
+  if(items){ const ii={ code:im.indexOf('item_code'), desc:im.indexOf('description') };
+    for(let k=1;k<items.length;k++){ const r=items[k]; descMap.set(S(r[ii.code]), S(r[ii.desc])); } }
+  const bal=new Map(); const unitMap=new Map();
+  for(let k=1;k<moves.length;k++){
+    const r=moves[k]; const code=S(r[i.item]); const u=S(r[i.unit]);
+    const qin=Number(r[i.in]||0), qout=Number(r[i.out]||0);
+    const src=S(r[i.src]), dst=S(r[i.dst]);
+    if(dst){ const key=`${code}||${dst}`; bal.set(key, (bal.get(key)||0) + qin); unitMap.set(code,u||unitMap.get(code)||''); }
+    if(src){ const key=`${code}||${src}`; bal.set(key, (bal.get(key)||0) - qout); unitMap.set(code,u||unitMap.get(code)||''); }
+  }
+  out=[]; for(const [key,qty] of bal.entries()){
+    const [code,loc] = key.split('||'); if(!code) continue;
+    out.push({ code, desc: descMap.get(code)||'', loc, qty, unit: unitMap.get(code)||'' });
+  }
+  render();
+}
+function render(){
+  const q=S(document.getElementById('q').value).toLowerCase(), fl=S(document.getElementById('fLoc').value).toLowerCase();
+  let view=out;
+  if(q){ view=view.filter(r=> r.code.toLowerCase().includes(q) || (r.desc||'').toLowerCase().includes(q) || (r.loc||'').toLowerCase().includes(q)); }
+  if(fl){ view=view.filter(r=> (r.loc||'').toLowerCase().includes(fl)); }
+  view.sort((a,b)=> a.code.localeCompare(b.code) || (a.loc||'').localeCompare(b.loc||''));
+  const tb=document.getElementById('tb'); tb.innerHTML='';
+  view.forEach(r=> tb.insertAdjacentHTML('beforeend', `<tr><td>${r.code}</td><td>${r.desc||''}</td><td>${r.loc||''}</td><td>${(r.qty||0).toLocaleString()}</td><td>${r.unit||''}</td></tr>`));
+  document.getElementById('hint').textContent = `件数: ${view.length}`;
+}
+function exportExcel(){ const wb=XLSX.utils.table_to_book(document.getElementById('tbl'),{sheet:"Inventory"}); XLSX.writeFile(wb,"inventory.xlsx"); }
+document.getElementById('btnExport').addEventListener('click', exportExcel);
+['q','fLoc'].forEach(id=> document.getElementById(id).addEventListener('input', render));
+load();
+</script>
+</body>
+</html>
