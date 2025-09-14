@@ -49,8 +49,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const S=s=>String(s??'').trim();
-const CSV_MASTER=`https://docs.google.com/spreadsheets/d/${APP.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(APP.TAB_MASTER)}`;
-const CSV_LOG   =`https://docs.google.com/spreadsheets/d/${APP.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(APP.TAB_LOG)}`;
+// --- GANTI baris ini di position.html ---
+const CSV_MASTER = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmw6oMhjQRmXjSL9R9PhBZGa0aJ5WrxHKYzcOpACGOo1GEV0NimYgpTAsnUiNg7nT4tEQ-euqDSSVt/pub?gid=0&single=true&output=csv";          // 最新情報
+const CSV_LOG    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmw6oMhjQRmXjSL9R9PhBZGa0aJ5WrxHKYzcOpACGOo1GEV0NimYgpTAsnUiNg7nT4tEQ-euqDSSVt/pub?gid=2085218630&single=true&output=csv"; // scan_log
 function parseCSV(t){const rows=[],re=/\s*("(?:[^"]|"")*"|[^,]*)\s*(,|\n|$)/g;let m,row=[];t=t.replace(/\r\n?/g,"\n");for(let i=0;i<t.length;){re.lastIndex=i;m=re.exec(t);if(!m)break;let c=m[1];if(c.startsWith('"'))c=c.slice(1,-1).replace(/""/g,'"');row.push(c);i=re.lastIndex;if(m[2]==="\n"||m[2]===""){rows.push(row);row=[]}}return rows.filter(r=>r.length&&r.some(c=>S(c)!==""))}
 function idxMaster(h){const map={};h.forEach((x,i)=>map[S(x)]=i);const f=ns=>{for(const n of ns){if(n in map) return map[n]}return null};return{cust:f(["顧客名","客先","Customer"]),draw:f(["図番","Drawing","図面"]),item:f(["商品名","品名","Item"]),machine:f(["機種","機種名","Machine"]),note:f(["注番","注文番号","備考","Order"])}}
 let live=false,timer=null,interval=60000,rowsOut=[];
