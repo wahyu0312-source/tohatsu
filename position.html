@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ポジション一覧</title>
+<link rel="stylesheet" href="./assets/ui.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <strong>ポジション一覧（最新スキャン）</strong>
+    <nav class="nav">
+      <a href="./index.html">← ダッシュボード</a>
+      <a href="./item.html">タイムライン</a>
+    </nav>
+    <div class="hstack">
+      <button id="btnLive" class="btn">Live</button>
+      <select id="selInterval"><option value="5000">5s</option><option value="10000">10s</option><option value="30000">30s</option><option value="60000" selected>60s</option></select>
+      <span id="hint" class="badge">Live: Off</span>
+    </div>
+  </div>
+</header>
+
+<main style="max-width:1200px;margin:28px auto;padding:0 20px">
+  <section class="card">
+    <div class="hstack" style="justify-content:space-between">
+      <h2 style="margin:0">サマリー</h2>
+      <div class="hstack">
+        <input id="q" placeholder="検索（ID/顧客/商品名/機種/位置）">
+        <select id="fEvent"><option value="">Event: All</option><option>RECEIVE</option><option>WIP</option><option>QC</option><option>PACK</option><option>SHIP</option></select>
+        <input id="fLoc" placeholder="Location filter">
+        <button id="btnExport" class="btn">Export Excel</button>
+      </div>
+    </div>
+    <div class="hstack" id="chipsEvent" style="flex-wrap:wrap;margin-top:8px"></div>
+    <div class="hstack" id="chipsLoc" style="flex-wrap:wrap;margin-top:8px"></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <table id="tbl" class="table">
+      <thead><tr><th>Item ID</th><th>最新イベント</th><th>現在位置</th><th>最終更新</th><th>顧客名</th><th>商品名</th><th>機種</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </section>
+</main>
+<div class="footer">Design by Wahyu</div>
+
+<script src="./assets/config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const S=s=>String(s??'').trim();
+const CSV_MASTER=`https://docs.google.com/spreadsheets/d/${APP.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(APP.TAB_MASTER)}`;
+const CSV_LOG   =`https://docs.google.com/spreadsheets/d/${APP.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(APP.TAB_LOG)}`;
+function parseCSV(t){const rows=[],re=/\s*("(?:[^"]|"")*"|[^,]*)\s*(,|\n|$)/g;let m,row=[];t=t.replace(/\r\n?/g,"\n");for(let i=0;i<t.length;){re.lastIndex=i;m=re.exec(t);if(!m)break;let c=m[1];if(c.startsWith('"'))c=c.slice(1,-1).replace(/""/g,'"');row.push(c);i=re.lastIndex;if(m[2]==="\n"||m[2]===""){rows.push(row);row=[]}}return rows.filter(r=>r.length&&r.some(c=>S(c)!==""))}
+function idxMaster(h){const map={};h.forEach((x,i)=>map[S(x)]=i);const f=ns=>{for(const n of ns){if(n in map) return map[n]}return null};return{cust:f(["顧客名","客先","Customer"]),draw:f(["図番","Drawing","図面"]),item:f(["商品名","品名","Item"]),machine:f(["機種","機種名","Machine"]),note:f(["注番","注文番号","備考","Order"])}}
+let live=false,timer=null,interval=60000,rowsOut=[];
+function setLive(v){live=v; paintHint(); if(timer)clearInterval(timer); if(v){timer=setInterval(()=>{if(document.visibilityState==='visible') load();},interval)}}
+function paintHint(){document.getElementById('hint').textContent = live?`Live: On / ${Math.round(interval/1000)}s`:'Live: Off'}
+async function load(){
+  const [rLog,rMas]=await Promise.all([fetch(CSV_LOG+"&_ts="+Date.now(),{cache:'no-store'}),fetch(CSV_MASTER+"&_ts="+Date.now(),{cache:'no-store'})]);
+  if(!rLog.ok||!rMas.ok){ document.getElementById('hint').textContent='読み込み失敗（公開/共有設定を確認）'; return; }
+  const [tLog,tMas]=await Promise.all([rLog.text(),rMas.text()]); const log=parseCSV(tLog), mas=parseCSV(tMas);
+  const hL=log[0].map(S), iL={ts:hL.indexOf('ts'), id:hL.indexOf('item_id'), ev:hL.indexOf('event'), loc:hL.indexOf('location')};
+  const latest={}; for(let i=1;i<log.length;i++){ const r=log[i], id=S(r[iL.id]); const ts=new Date(S(r[iL.ts])||0).getTime(); if(!id||!ts) continue; const ev=S(r[iL.ev]), loc=S(r[iL.loc]); if(!latest[id]||ts>latest[id].ts) latest[id]={ts,ev,loc}; }
+  const hM=mas[0].map(S), iM=idxMaster(hM), rowsMas=mas.slice(1);
+  const byDraw=new Map(),byItem=new Map(),byNote=new Map();
+  for(const r of rowsMas){ const draw=S(r[iM.draw]), item=S(r[iM.item]), note=S(r[iM.note]); const entry={cust:S(r[iM.cust]), item:S(r[iM.item]), machine:S(r[iM.machine])}; if(draw)byDraw.set(draw,entry); if(item)byItem.set(item,entry); if(note)byNote.set(note,entry); }
+  rowsOut=[]; Object.entries(latest).forEach(([id,v])=>{ const meta=byDraw.get(id)||byItem.get(id)||byNote.get(id)||{}; rowsOut.push({id,ev:v.ev||'-',loc:v.loc||'-',ts:new Date(v.ts),cust:meta.cust||'',item:meta.item||'',machine:meta.machine||''}); });
+  render(); paintChips(rowsOut);
+}
+function render(){
+  const q=S(document.getElementById('q').value).toLowerCase(), fe=S(document.getElementById('fEvent').value), fl=S(document.getElementById('fLoc').value).toLowerCase();
+  let view=rowsOut;
+  if(q){ view=view.filter(r=> r.id.toLowerCase().includes(q)||(r.cust||'').toLowerCase().includes(q)||(r.item||'').toLowerCase().includes(q)||(r.machine||'').toLowerCase().includes(q)||(r.loc||'').toLowerCase().includes(q)); }
+  if(fe){ view=view.filter(r=>r.ev===fe); }
+  if(fl){ view=view.filter(r=>r.loc.toLowerCase().includes(fl)); }
+  const tb=document.getElementById('tb'); tb.innerHTML=''; view.sort((a,b)=>b.ts.getTime()-a.ts.getTime());
+  view.forEach(r=> tb.insertAdjacentHTML('beforeend', `<tr>
+    <td><a href="./item.html?id=${encodeURIComponent(r.id)}" style="color:#2563eb;text-decoration:none">${r.id}</a></td>
+    <td>${r.ev}</td><td>${r.loc}</td><td>${r.ts.toLocaleString()}</td>
+    <td>${r.cust||''}</td><td>${r.item||''}</td><td>${r.machine||''}</td></tr>`));
+  document.getElementById('hint').textContent=`件数: ${view.length} / 全体: ${rowsOut.length}`;
+}
+function paintChips(rows){
+  const cEvent={}, cLoc={}; rows.forEach(r=>{ cEvent[r.ev]=(cEvent[r.ev]||0)+1; cLoc[r.loc]=(cLoc[r.loc]||0)+1; });
+  const evBox=document.getElementById('chipsEvent'); evBox.innerHTML=''; ['RECEIVE','WIP','QC','PACK','SHIP'].forEach(k=> evBox.insertAdjacentHTML('beforeend', `<div class="pill">${k} ${cEvent[k]||0}</div>`));
+  const locBox=document.getElementById('chipsLoc'); locBox.innerHTML=''; Object.entries(cLoc).sort((a,b)=>b[1]-a[1]).slice(0,10).forEach(([loc,c])=> locBox.insertAdjacentHTML('beforeend', `<div class="pill">${loc}: ${c}</div>`));
+}
+function exportExcel(){ const wb=XLSX.utils.table_to_book(document.getElementById('tbl'),{sheet:"Positions"}); XLSX.writeFile(wb,"positions.xlsx"); }
+
+document.getElementById('btnExport').addEventListener('click', exportExcel);
+document.getElementById('btnLive').addEventListener('click', ()=> setLive(!live));
+document.getElementById('selInterval').addEventListener('change', e=>{ interval=parseInt(e.target.value,10)||60000; if(live) setLive(true); else paintHint(); });
+['q','fEvent','fLoc'].forEach(id=> document.getElementById(id).addEventListener('input', render));
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState!=='visible'&&live){ setLive(false); }});
+paintHint(); load();
+</script>
+</body>
+</html>
