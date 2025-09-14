@@ -79,8 +79,13 @@
 <script>
 // ===== Config shortcuts =====
 const SHEET_ID = APP.SHEET_ID, TAB_NAME = APP.TAB_MASTER;
-const CSV_URL  = `https://docs.google.com/spreadsheets/d/e/2PACX-1vSmw6oMhjQRmXjSL9R9PhBZGa0aJ5WrxHKYzcOpACGOo1GEV0NimYgpTAsnUiNg7nT4tEQ-euqDSSVt/pub?gid=0&single=true&output=csv`;
-const LOG_CSV  = `https://docs.google.com/spreadsheets/d/e/2PACX-1vSmw6oMhjQRmXjSL9R9PhBZGa0aJ5WrxHKYzcOpACGOo1GEV0NimYgpTAsnUiNg7nT4tEQ-euqDSSVt/pub?gid=0&single=true&output=csv`;
+
+// CSV master (最新情報)
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmw6oMhjQRmXjSL9R9PhBZGa0aJ5WrxHKYzcOpACGOo1GEV0NimYgpTAsnUiNg7nT4tEQ-euqDSSVt/pub?gid=0&single=true&output=csv";
+
+// CSV scan_log (PERBAIKAN: pakai gid=2085218630)
+const LOG_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmw6oMhjQRmXjSL9R9PhBZGa0aJ5WrxHKYzcOpACGOo1GEV0NimYgpTAsnUiNg7nT4tEQ-euqDSSVt/pub?gid=2085218630&single=true&output=csv";
+
 const LOG_API  = APP.LOG_API, LOG_TOKEN = APP.LOG_TOKEN, CURRENT_USER = APP.CURRENT_USER;
 const S = s => String(s ?? '').trim();
 
@@ -185,11 +190,13 @@ function renderTable(header, idx, rows, tbodyEl, headEl, latestMap){
   rows.forEach(r=>{
     const rowUrg=idx.status_flag!=null?isUrgent(valAt(r, idx.status_flag)):false;
     const tds=header.map((_,i)=>`<td>${S(r[i])}</td>`);
-    // Link ID → timeline (pakai 図番; kalau kunci utama 注番, ganti idx.draw → idx.note)
+
+    // Link 図番 → timeline
     if(idx.draw!=null){
       const rawId=S(valAt(r, idx.draw));
       if(rawId) tds[idx.draw]=`<td><a href="./item.html?id=${encodeURIComponent(rawId)}" style="color:#2563eb;text-decoration:none">${rawId}</a></td>`;
     }
+
     const dateCol=idx.date!=null?idx.date:0;
     const d=idx.date!=null?parseJPDate(valAt(r, idx.date)):null;
     const dateText=d?toInputDate(d):S(r[dateCol]||'');
@@ -198,7 +205,7 @@ function renderTable(header, idx, rows, tbodyEl, headEl, latestMap){
     const badge=statusObj?`<span class="pill">${statusObj.label}</span>`:'';
     tds[dateCol]=`<td>${urgentFlag} ${badge} ${dateText}</td>`;
 
-    const itemKey = S(valAt(r, idx.draw) || valAt(r, idx.item) || valAt(r, idx.note)); // ubah urutan jika kunci utama ≠ 図番
+    const itemKey = S(valAt(r, idx.draw) || valAt(r, idx.item) || valAt(r, idx.note));
     const latest = latestMap[itemKey];
     tds.push(`<td>${latest?S(latest.event):'-'}</td>`);
     tds.push(`<td>${latest?S(latest.location):'-'}</td>`);
@@ -283,12 +290,6 @@ function applyFilter(dateStr){
 function exportExcel(){
   const wb=XLSX.utils.table_to_book(document.getElementById("shipTable"),{sheet:"出荷状況"});
   XLSX.writeFile(wb,"出荷状況.xlsx");
-}
-function exportPDF(){
-  const { jsPDF } = window.jspdf; const doc=new jsPDF({orientation:"landscape", unit:"pt", format:"a4"});
-  doc.setFontSize(14); doc.text("出荷状況一覧", 40, 40);
-  doc.autoTable({html:"#shipTable", startY:60, styles:{fontSize:9, cellPadding:4, halign:"center", valign:"middle"}, headStyles:{fillColor:[238,242,247]}});
-  doc.save("出荷状況.pdf");
 }
 
 // ===== Auto refresh =====
@@ -404,6 +405,9 @@ document.getElementById('btnExcel').addEventListener('click', exportExcel);
 document.getElementById('btnToday').addEventListener('click', ()=> applyFilter(toInputDate(new Date())));
 document.getElementById('btnClear').addEventListener('click', ()=>{ document.getElementById('filterDate').value=""; applyFilter(null); });
 document.getElementById('filterDate').addEventListener('change', e=> applyFilter(e.target.value||null));
+// <<< PERBAIKAN Penting: buka modal Input >>>
+document.getElementById('btnManual').addEventListener('click', ()=>{ manualModal.style.display='flex'; });
+
 scanModal.addEventListener('click', e=>{ if(e.target===scanModal) closeScanner(); });
 scanModal.querySelector('#scanClose').addEventListener('click', closeScanner);
 manualModal.addEventListener('click', e=>{ if(e.target===manualModal) manualModal.style.display='none'; });
@@ -414,4 +418,3 @@ window.addEventListener('DOMContentLoaded', ()=>{ load(); startAutoRefresh(60000
 </script>
 </body>
 </html>
-
