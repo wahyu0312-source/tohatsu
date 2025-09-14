@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>受入 (GRN)</title>
+<link rel="stylesheet" href="./assets/ui.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <strong>受入 (GRN)</strong>
+    <nav class="nav"><a href="./index.html">← ダッシュボード</a><a href="./inventory.html">在庫</a></nav>
+  </div>
+</header>
+
+<main style="max-width:720px;margin:28px auto;padding:0 20px">
+  <section class="card">
+    <h2 style="margin:0 0 8px">フォーム</h2>
+    <div class="hstack" style="flex-direction:column;align-items:stretch;gap:10px">
+      <input id="doc_no" placeholder="Doc No (optional)">
+      <input id="item_code" placeholder="Item Code" required>
+      <input id="qty" placeholder="Qty (numeric)" type="number" step="any" required>
+      <input id="unit" placeholder="Unit 例: PCS / KG">
+      <input id="dst_loc" placeholder="Destination Location 例: 倉庫A" required>
+      <input id="note" placeholder="Note (任意)">
+      <button class="btn primary" id="submit">Submit GRN</button>
+      <div id="hint" class="small" style="color:#64748b"></div>
+    </div>
+  </section>
+</main>
+<div class="footer">Design by Wahyu</div>
+
+<script src="./assets/config.js"></script>
+<script>
+const S=s=>String(s??'').trim();
+document.getElementById('submit').addEventListener('click', async ()=>{
+  const payload={
+    token:APP.LOG_TOKEN, action:'move', doc_type:'GRN',
+    doc_no:S(document.getElementById('doc_no').value),
+    item_code:S(document.getElementById('item_code').value),
+    qty:Number(document.getElementById('qty').value||0),
+    unit:S(document.getElementById('unit').value),
+    dst_loc:S(document.getElementById('dst_loc').value),
+    user:APP.CURRENT_USER, note:S(document.getElementById('note').value)
+  };
+  if(!payload.item_code || !payload.qty || !payload.dst_loc){ document.getElementById('hint').textContent='必須項目を入力してください。'; return; }
+  document.getElementById('hint').textContent='送信中…';
+  try{
+    const r=await fetch(APP.LOG_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j=await r.json().catch(()=>({ok:false}));
+    document.getElementById('hint').textContent = j.ok ? '登録しました ✅' : ('失敗: '+(j.error||r.status));
+    if(j.ok){ document.getElementById('qty').value=''; document.getElementById('note').value=''; }
+  }catch(e){ document.getElementById('hint').textContent='エラー: '+e.message; }
+});
+</script>
+</body>
+</html>
