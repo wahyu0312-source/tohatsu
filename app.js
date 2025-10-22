@@ -1,0 +1,1702 @@
+/* =========================================================
+ * app.js — Tokyo Seimitsu ERP (Frontend) — CORS-safe + JSONP
+ * ========================================================= */
+
+/* ===== Config (API dinamis) ===== */
+const DEFAULT_API = "https://script.google.com/macros/s/AKfycbxbU8p3aM6O4514lXKsiaXTaZKYTLCZS-LPBLULoGIOyfcKypMpQZn97lRgj4sKsE_42w/exec";
+function resolveApiBase(){
+  const ls = (localStorage.getItem('API_BASE')||'').trim();
+  return ls || DEFAULT_API;
+}
+Object.defineProperty(window, 'API_BASE', { get: resolveApiBase });
+
+const API_KEY = ""; // biarkan kosong agar tidak memicu preflight
+// Di GitHub Pages, CORS ke Apps Script selalu blocked → pakai JSONP langsung
+const PREFER_JSONP = false;
+
+/* ===== Processes ===== */
+const PROCESSES = [
+  "レザー加工","曲げ加工","外枠組立","シャッター組立","シャッター溶接","コーキング",
+  "外枠塗装","組立（組立中）","組立（組立済）","外注","検査中","検査済","出荷準備","出荷済"
+];
+
+/* ===== Station rules ===== */
+const STATION_RULES = {
+  "レザー加工":    (o)=> ({ current_process: "レザー加工" }),
+  "曲げ工程":      (o)=> ({ current_process: "曲げ加工" }), // alias
+  "曲げ加工":      (o)=> ({ current_process: "曲げ加工" }),
+  "外枠組立":      (o)=> ({ current_process: "外枠組立" }),
+  "シャッター組立": (o)=> ({ current_process: "シャッター組立" }),
+  "シャッター溶接": (o)=> ({ current_process: "シャッター溶接" }),
+  "コーキング":    (o)=> ({ current_process: "コーキング" }),
+  "外枠塗装":      (o)=> ({ current_process: "外枠塗装" }),
+  "組立工程":      (o)=> (o.current_process==="組立（組立中）"
+                        ? { current_process:"組立（組立済）" }
+                        : { current_process:"組立（組立中）" }),
+  "検査工程":      (o)=> (o.current_process==="検査工程"
+                        && !["検査保留","不良品（要リペア）","検査済"].includes(o.status)
+                        ? { current_process:"検査工程", status:"検査済" }
+                        : { current_process:"検査工程" }),
+  "出荷工程":      (o)=> (o.status==="出荷準備"
+                        ? { current_process:(o.current_process||"検査工程"), status:"出荷済" }
+                        : { current_process:"検査工程", status:"出荷準備" }),
+
+  // ⬇️ label baru agar tombol QR bisa langsung set status/proses
+  "検査中":        (o)=> ({ current_process: "検査中", status: "検査工程" }),
+  "検査済":        (o)=> ({ current_process: "検査済", status: "検査済" }),
+  "出荷準備":      (o)=> ({ current_process: (o.current_process||"検査済"), status: "出荷準備" }),
+  "出荷済":        (o)=> ({ current_process: (o.current_process||"検査済"), status: "出荷済" })
+};
+
+/* ===== Shortcuts ===== */
+const $     = (s)=> document.querySelector(s);
+const fmtDT = (s)=> s ? new Date(s).toLocaleString() : "";
+const fmtD  = (s)=> s ? new Date(s).toLocaleDateString() : "";
+let SESSION=null, CURRENT_PO=null, scanStream=null, scanTimer=null;
+let INV_PREVIEW={info:null, lines:[]};
+
+/* ===== Visual mapping ===== */
+const STATUS_CLASS = {
+  "生産開始":"st-begin","検査工程":"st-inspect","検査済":"st-inspect",
+  "検査保留":"st-hold","出荷準備":"st-ready","出荷済":"st-shipped","不良品（要リペア）":"st-ng"
+};
+const PROC_CLASS = {
+  "レザー加工":"prc-laser","曲げ加工":"prc-bend","外枠組立":"prc-frame","シャッター組立":"prc-shassy",
+  "シャッター溶接":"prc-shweld","コーキング":"prc-caulk","外枠塗装":"prc-tosou",
+  "組立（組立中）":"prc-asm-in","組立（組立済）":"prc-asm-ok","外注":"prc-out",
+  "検査工程":"prc-inspect",
+  "検査中":"prc-inspecting",
+  "検査済":"prc-inspected",
+  "出荷準備":"prc-shipready",
+  "出荷済":"prc-shipped"
+};
+
+/* ===== SWR Cache ===== */
+const SWR = {
+  get(key){ try{ const x=localStorage.getItem(key); return x? JSON.parse(x):null;}catch(e){return null;} },
+  set(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} },
+};
+
+/* ===== API helpers (CORS-safe + JSONP fallback) ===== */
+/* ===== API helpers (CORS-safe + JSONP fallback) ===== */
+function toQS(obj){
+  return Object.keys(obj||{}).map(k =>
+    encodeURIComponent(k) + "=" + encodeURIComponent(obj[k] ?? "")
+  ).join("&");
+}
+
+function jsonp(action, params = {}){
+  return new Promise((resolve, reject)=>{
+    const cb  = "__jp" + Date.now() + Math.floor(Math.random()*1e6);
+    const q   = { action, ...params, callback: cb, jsonp: 1, _: Date.now() };
+    const url = resolveApiBase() + "?" + toQS(q);
+
+    const s = document.createElement("script");
+    let done = false;
+    const timer = setTimeout(()=>{ cleanup(); reject(new Error("JSONP timeout")); }, 15000);
+
+    function cleanup(){
+      if(done) return;
+      done = true;
+      clearTimeout(timer);
+      try{ delete window[cb]; }catch{}
+      try{ s.remove(); }catch{}
+    }
+
+    window[cb] = function(resp){
+      cleanup();
+      if(!resp || resp.ok === false){
+        reject(new Error((resp && resp.error) || "Server error"));
+      }else{
+        resolve(resp.data);
+      }
+    };
+
+    s.onerror = () => { cleanup(); reject(new Error("JSONP network error")); };
+    s.async = true;
+    s.referrerPolicy = "no-referrer";
+    s.crossOrigin = "anonymous";
+    s.src = url;
+    document.head.appendChild(s);
+  });
+}
+
+/* --- POST with fetch, fallback JSONP --- */
+async function apiPost(action, body){
+  const payload = { action, ...(API_KEY ? { apiKey: API_KEY } : {}), ...body };
+  try{
+    const res = await fetch(resolveApiBase(), {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: toQS(payload),
+      cache: "no-store",
+      redirect: "follow"
+    });
+    const txt = await res.text();
+    const j = JSON.parse(txt);
+    if (!j || j.ok === false) throw new Error(j?.error || "API error");
+    if (j.data == null) throw new Error("Empty server data");
+    return j.data;
+  }catch(err){
+    console.warn("POST -> fallback JSONP:", err?.message || err);
+    const data = await jsonp(action, payload);
+    if (!data) throw new Error("Empty server data");
+    return data;
+  }
+}
+
+/* --- GET with fetch, fallback JSONP (SWR cache) --- */
+async function apiGet(params, {swrKey=null, revalidate=true} = {}){
+  const final = { ...params, ...(API_KEY ? { apiKey: API_KEY } : {}) };
+  const url   = resolveApiBase() + "?" + new URLSearchParams(final).toString();
+  const key   = swrKey || ("GET:" + url);
+
+  // Serve cache dulu + revalidate di belakang
+  const cached = SWR.get(key);
+  if (cached && revalidate){
+    fetch(url, { cache:"no-store", mode:"cors", redirect:"follow" })
+      .then(r=>r.text())
+      .then(txt=>{
+        try{
+          const j = JSON.parse(txt);
+          if (j && j.ok) {
+            SWR.set(key, j.data);
+            document.dispatchEvent(new CustomEvent("swr:update", { detail:{ key } }));
+          }
+        }catch{}
+      })
+      .catch(()=>{});
+    return cached;
+  }
+
+  // Coba fetch normal
+  try{
+    const res = await fetch(url, { cache:"no-store", mode:"cors", redirect:"follow" });
+    const txt = await res.text();
+    const j = JSON.parse(txt);
+    if (!j || j.ok === false) throw new Error(j?.error || "API error");
+    SWR.set(key, j.data);
+    return j.data;
+  }catch(err){
+    // Fallback JSONP
+    console.warn("GET -> fallback JSONP:", err?.message || err);
+    const data = await jsonp(final.action || params.action || "unknown", final);
+    SWR.set(key, data);
+    return data;
+  }
+}
+
+
+function showApiError(action, err){
+  console.error("API FAIL:", action, err);
+  let bar=document.getElementById("errbar");
+  if(!bar){
+    bar=document.createElement("div");
+    bar.id="errbar";
+    bar.style.cssText="position:fixed;left:12px;right:12px;bottom:12px;background:#fee;border:1px solid #f99;color:#900;padding:10px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.08);z-index:9999";
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML=`<b>APIエラー</b> <code>${action||"-"}</code> — ${err.message||err}`;
+}
+
+// ==== Realtime watcher (cek perubahan di server) ====
+let LAST_REV = null;
+function startRealtimeWatcher(){
+  setInterval(async () => {
+    try{
+      const r = await apiGet({ action: "rev" }, { revalidate:false });
+      const nowRev = new Date(r.ts).getTime();
+      if (LAST_REV == null) { LAST_REV = nowRev; return; }
+
+      if (nowRev > LAST_REV) {
+        LAST_REV = nowRev;
+        if (!document.hidden) {
+          // refresh widget 進捗状況 & kartu dashboard
+          refreshAll(true);
+          // kalau halaman 出荷予定 sedang terbuka, segarkan juga
+          const shipVisible = !document.getElementById('pageShip')?.classList.contains('hidden');
+          if (shipVisible) renderShipList().catch(()=>{});
+          const shippedVisible = !document.getElementById('pageShipped')?.classList.contains('hidden');
+          if (shippedVisible) renderShippedList().catch(()=>{});
+        }
+      }
+    }catch(_){ /* network hiccup: abaikan */ }
+  }, 8000);
+
+  // saat tab kembali fokus, paksa cek ulang
+  document.addEventListener("visibilitychange", ()=>{
+    if(!document.hidden) LAST_REV = 0;
+  });
+}
+function broadcastDataChange(kind){
+  try{ localStorage.setItem('erp:dataChanged', JSON.stringify({kind, ts: Date.now()})); }catch{}
+}
+window.addEventListener('storage', (ev)=>{
+  if (ev.key === 'erp:dataChanged') {
+    refreshAll(true);
+    const shipVisible = !document.getElementById('pageShip')?.classList.contains('hidden');
+    if (shipVisible) renderShipList().catch(()=>{});
+    const shippedVisible = !document.getElementById('pageShipped')?.classList.contains('hidden');
+    if (shippedVisible) renderShippedList().catch(()=>{});
+  }
+});
+
+/* ===== Skeleton helpers ===== */
+function tableSkeleton(tbody, rows=7, cols=8){
+  if(!tbody) return;
+  const frag=document.createDocumentFragment();
+  for(let i=0;i<rows;i++){
+    const tr=document.createElement("tr");
+    for(let c=0;c<cols;c++){
+      const td=document.createElement("td");
+      td.innerHTML=`<div class="shimmer" style="height:14px;border-radius:6px"></div>`;
+      tr.appendChild(td);
+    }
+    frag.appendChild(tr);
+  }
+  tbody.innerHTML=""; tbody.appendChild(frag);
+}
+function clearSkeleton(tbody){ if(tbody) tbody.innerHTML=""; }
+
+/* ===== Weather (Open-Meteo, no key) ===== */
+async function initWeather(){
+  const elPlace = document.getElementById("wxPlace") || document.querySelector('[data-wx="place"]');
+  const elTemp  = document.getElementById("wxTemp")  || document.querySelector('[data-wx="temp"]');
+  if((!elPlace && !elTemp) || !("geolocation" in navigator)) return;
+
+  function setUI(city, temp){
+    if(elPlace) elPlace.textContent = city || "現在地";
+    if(elTemp)  elTemp.textContent  = (temp!=null ? Math.round(temp)+"℃" : "--");
+  }
+
+  try{
+    const pos = await new Promise((res,rej)=> navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true, timeout:8000}));
+    const { latitude, longitude } = pos.coords;
+
+    // suhu & reverse geocoding dipisah agar aman saat CORS error
+    let city = "現在地";
+
+    // suhu
+    try {
+      const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m&timezone=auto`)
+        .then(r=>r.json());
+      const temp = wx && wx.current ? wx.current.temperature_2m : null;
+      setUI(city, temp);
+    } catch (e) {
+      setUI(city, null);
+    }
+
+    // reverse geocoding (opsional; boleh gagal)
+    try {
+      // HINDARI di GitHub Pages biar tidak spam error CORS
+      if (!location.hostname.endsWith("github.io")) {
+        const rev = await fetch(
+          `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${latitude}&longitude=${longitude}&language=ja`
+        ).then(r => r.json());
+        city = (rev && rev.results && rev.results[0]) 
+          ? (rev.results[0].name || rev.results[0].admin1 || "現在地") 
+          : "現在地";
+        setUI(city, (elTemp && /^\d+/.test(elTemp.textContent)) ? parseInt(elTemp.textContent) : null);
+      }
+    } catch (_) { /* ignore */ }
+
+  }catch(e){
+    console.warn("weather:", e);
+    setUI("現在地", null);
+  }
+}
+
+/* ===== Small utils ===== */
+function parseMultiIds(raw){
+  return String(raw||"")
+    .split(/[\s,;\n\r\t]+/)
+    .map(s=>s.trim())
+    .filter(Boolean);
+}
+function debounce(fn, ms = 150) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(null, args), ms);
+  };
+}
+function bindTap(el, handler) {
+  // aman di mobile & desktop
+  if (!el) return;              // FIX: guard null
+  el.addEventListener('pointerup', handler, {passive:true});
+  el.addEventListener('click',     handler); // fallback
+}
+
+/* ===== Boot ===== */
+window.addEventListener("DOMContentLoaded", ()=>{
+  // routing tombol
+  const map = {
+    btnToDash:    ()=> show("pageDash"),
+    btnToSales:   ()=> show("pageSales"),
+    btnToPlan:    ()=> show("pagePlan"),
+    btnToShip:    ()=> show("pageShip"),
+    btnToInvPage: ()=> { show("pageInventory"); renderInventory(); },
+    btnToFinPage: ()=> { show("pageFinished"); renderFinished(); },
+    btnToInvoice: ()=> show("pageInvoice"),
+    btnToCharts:  ()=> { show("pageCharts"); ensureChartsLoaded(); },
+    btnToShipped: ()=> { show("pageShipped"); renderShippedList(); }  // baru
+  };
+  Object.keys(map).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.onclick = map[id];
+  });
+
+  // Settings
+  const miStationQR = $("#miStationQR");
+  const miAddUser   = $("#miAddUser");
+  const miChangePass= $("#miChangePass");
+  const btnLogoutMenu = $("#btnLogout");
+  if(miStationQR) miStationQR.onclick = openStationQR;
+  if(miAddUser)   miAddUser.onclick   = openAddUserModal;
+  if(miChangePass)miChangePass.onclick= changePasswordUI;
+  if(btnLogoutMenu) btnLogoutMenu.onclick= ()=>{ SESSION=null; localStorage.removeItem("erp_session"); location.reload(); };
+
+  // Auth
+  const btnLogin   = $("#btnLogin");
+  const btnNewUser = $("#btnNewUser");
+  if(btnLogin)   btnLogin.onclick   = onLogin;
+  if(btnNewUser) btnNewUser.onclick = addUserFromLoginUI;
+
+  // Dashboard
+  const btnRefresh      = $("#btnRefresh");
+  const searchQ         = $("#searchQ");
+  const btnExportOrders = $("#btnExportOrders");
+  const btnExportShip   = $("#btnExportShip");
+  if(btnRefresh)      btnRefresh.onclick      = refreshAll;
+  if(searchQ)         searchQ.addEventListener("input", debounce(renderOrders, 200));
+  if(btnExportOrders) btnExportOrders.onclick = exportOrdersCSV;
+  if(btnExportShip)   btnExportShip.onclick   = exportShipCSV;
+
+  // Sales
+  const btnSalesSave   = $("#btnSalesSave");
+  const btnSalesDelete = $("#btnSalesDelete");
+  const btnSalesExport = $("#btnSalesExport");
+  const btnPromote     = $("#btnPromote");
+  const salesQ         = $("#salesQ");
+  const btnSalesImport = $("#btnSalesImport");
+  const fileSales      = $("#fileSales");
+  if(btnSalesSave)   btnSalesSave.onclick   = saveSalesUI;
+  if(btnSalesDelete) btnSalesDelete.onclick = deleteSalesUI;
+  if(btnSalesExport) btnSalesExport.onclick = exportSalesCSV;
+  if(btnPromote)     btnPromote.onclick     = promoteSalesUI;
+  if(salesQ)         salesQ.addEventListener("input", debounce(renderSales, 200));
+  if(btnSalesImport) btnSalesImport.onclick = ()=> fileSales && fileSales.click();
+  if(fileSales)      fileSales.onchange     = (e)=> handleImport(e, "sales");
+
+  // Plan
+  const btnCreateOrder = $("#btnCreateOrder");
+  const btnPlanExport  = $("#btnPlanExport");
+  const btnPlanEdit    = $("#btnPlanEdit");
+  const btnPlanDelete  = $("#btnPlanDelete");
+  const btnPlanImport  = $("#btnPlanImport");
+  const filePlan       = $("#filePlan");
+  if(btnCreateOrder) btnCreateOrder.onclick = createOrderUI;
+  if(btnPlanExport)  btnPlanExport.onclick  = exportOrdersCSV;
+  if(btnPlanEdit)    btnPlanEdit.onclick    = loadOrderForEdit;
+  if(btnPlanDelete)  btnPlanDelete.onclick  = deleteOrderUI;
+  if(btnPlanImport)  btnPlanImport.onclick  = ()=> filePlan && filePlan.click();
+  if(filePlan)       filePlan.onchange      = (e)=> handleImport(e, "orders");
+  const planQ = $("#planQ");
+  if (planQ) planQ.addEventListener("input", debounce(renderPlanList, 200));
+
+  // Ship
+  const btnSchedule    = $("#btnSchedule");
+  const btnShipExport  = $("#btnShipExport");
+  const btnShipEdit    = $("#btnShipEdit");
+  const btnShipDelete  = $("#btnShipDelete");
+  const btnShipByPO    = $("#btnShipByPO");
+  const btnShipByID    = $("#btnShipByID");
+  const btnShipImport  = $("#btnShipImport");
+  const fileShip       = $("#fileShip");
+  if(btnSchedule)   btnSchedule.onclick   = scheduleUI;
+  if(btnShipExport) btnShipExport.onclick = exportShipCSV;
+  if(btnShipEdit)   btnShipEdit.onclick   = loadShipForEdit;
+  if(btnShipDelete) btnShipDelete.onclick = deleteShipUI;
+  if(btnShipByPO)   btnShipByPO.onclick   = ()=>{ const po=$("#s_po").value.trim(); if(!po) return alert("注番入力"); openShipByPO(po); };
+  if(btnShipByID)   btnShipByID.onclick   = ()=>{ const id=prompt("出荷ID:"); if(!id) return; openShipByID(id.trim()); };
+  if(btnShipImport) btnShipImport.onclick = ()=> fileShip && fileShip.click();
+  if(fileShip)      fileShip.onchange     = (e)=> handleImport(e, "ship").then(()=>renderShipList());
+
+  // ===== Ship List filters =====
+  const shipCust = $("#shipCust");
+  const shipFrom = $("#shipFrom");
+  const shipTo   = $("#shipTo");
+  const btnShipReset = $("#btnShipReset");
+
+  // set default: hari ini
+  const today = new Date();
+  const iso = (d)=> new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  if (shipFrom && !shipFrom.value) shipFrom.value = iso(today);
+  if (shipTo   && !shipTo.value)   shipTo.value   = iso(today);
+
+  const rebakeShip = debounce(()=>renderShipList().catch(()=>{}), 200);
+  if (shipCust) shipCust.addEventListener("input", rebakeShip);
+  if (shipFrom) shipFrom.addEventListener("change", rebakeShip);
+  if (shipTo)   shipTo.addEventListener("change", rebakeShip);
+  if (btnShipReset) btnShipReset.onclick = ()=>{
+    if (shipCust) shipCust.value = "";
+    if (shipFrom) shipFrom.value = iso(today);
+    if (shipTo)   shipTo.value   = iso(today);
+    renderShipList().catch(()=>{});
+  };
+
+  const shippedQ = $("#shippedQ");
+  if (shippedQ) shippedQ.addEventListener("input", debounce(renderShippedList, 200));
+
+  // Invoice
+  const btnInvPreview = $("#btnInvPreview");
+  const btnInvCreate  = $("#btnInvCreate");
+  const btnInvPrint   = $("#btnInvPrint");
+  const btnInvCSV     = $("#btnInvCSV");
+  if(btnInvPreview) btnInvPreview.onclick = previewInvoiceUI;
+  if(btnInvCreate)  btnInvCreate.onclick  = createInvoiceUI;
+  if(btnInvPrint)   btnInvPrint.onclick   = ()=> openInvoiceDoc(INV_PREVIEW.inv_id||"");
+  if(btnInvCSV)     btnInvCSV.onclick     = exportInvoiceCSV;
+
+  // Charts
+  const btnChartsRefresh = $("#btnChartsRefresh");
+  fillChartYearSelector();
+  if(btnChartsRefresh) btnChartsRefresh.onclick = renderCharts;
+
+  // Inventory & Finished filters
+  const invQ = $("#invQ"); if(invQ) invQ.addEventListener("input", debounce(renderInventory, 200));
+  const finQ = $("#finQ"); if(finQ) finQ.addEventListener("input", debounce(renderFinished, 200));
+
+  // Keyboard shortcuts (modal)
+  document.addEventListener("keydown", onGlobalShortcut);
+
+  // SWR update listener
+  document.addEventListener("swr:update", (ev)=>{
+    const key=ev.detail?.key||"";
+    if(key.includes("action=listOrders")) renderOrders().catch(console.warn);
+    if(key.includes("action=listSales")) { renderSales().catch(console.warn); populateChubanFromSales().catch(console.warn); }
+  });
+
+  // Restore session
+  const saved=localStorage.getItem("erp_session");
+  if(saved){ SESSION=JSON.parse(saved); enter(); } else { show("authView"); }
+
+  // Scanner buttons
+  const btnScanStart = $("#btnScanStart"); if (btnScanStart) btnScanStart.onclick = ()=> initScan();
+  const btnScanClose = $("#btnScanClose"); if (btnScanClose) btnScanClose.onclick = ()=>{ stopScan(); $("#dlgScan").close(); };
+
+  // contoh: untuk tombol OK/NG per proses
+  const okBtn = document.getElementById('btnProcOk');
+  const ngBtn = document.getElementById('btnProcNg');
+  if (okBtn) bindTap(okBtn, () => updateProcessResult('OK'));
+  if (ngBtn) bindTap(ngBtn, () => updateProcessResult('NG'));
+
+  // 注番 source selector (plan)
+  initChubanSelector();
+
+  // Weather & realtime
+  initWeather();
+  startRealtimeWatcher();
+});
+
+/* ===== View helpers ===== */
+function show(id){
+  const ids = ["authView","pageDash","pageSales","pagePlan","pageShip","pageInvoice",
+               "pageCharts","pageInventory","pageFinished","pageShipped"]; // +pageShipped
+
+  // sembunyikan semua, tampilkan target
+  ids.forEach(x=>{
+    const el=document.getElementById(x);
+    if(el) el.classList.add("hidden");
+  });
+  const target=document.getElementById(id);
+  if(target) target.classList.remove("hidden");
+
+  // highlight tombol aktif
+  const map = {
+    pageDash:"btnToDash", pageSales:"btnToSales", pagePlan:"btnToPlan", pageShip:"btnToShip",
+    pageInventory:"btnToInvPage", pageFinished:"btnToFinPage", pageInvoice:"btnToInvoice",
+    pageCharts:"btnToCharts", pageShipped:"btnToShipped"
+  };
+  Object.values(map).forEach(b=>{
+    const el=document.getElementById(b);
+    if(el) el.style.boxShadow="none";
+  });
+  const activeBtnId = map[id];
+  const btn = activeBtnId && document.getElementById(activeBtnId);
+  if(btn) btn.style.boxShadow="0 8px 22px rgba(16,24,40,.12)";
+
+  // lazy render
+  if(id==="pageCharts") ensureChartsLoaded();
+  if(id==="pagePlan")   renderPlanList().catch(console.warn);
+  if(id==="pageShip")   renderShipList().catch(console.warn);
+  if(id==="pageShipped")renderShippedList().catch(console.warn);
+}
+
+function onGlobalShortcut(e){
+  const dlg=document.querySelector("dialog[open]");
+  if(!dlg) return;
+  if(e.key.toLowerCase()==="e"){
+    const id=dlg.id;
+    if(id==="dlgHistory") exportHistoryCSV();
+    if(id==="dlgTicket")  window.print();
+    if(id==="dlgShip")    window.print();
+  }
+  if(e.key.toLowerCase()==="r"){
+    const id=dlg.id;
+    if(id==="dlgHistory"){
+      const inp=dlg.querySelectorAll('input[type="date"]');
+      inp.forEach(x=> x.value="");
+      const q=dlg.querySelector('input[type="text"]'); if(q) q.value="";
+      const list=dlg.querySelector("#histBody"); if(list) list.innerHTML="";
+    }
+  }
+}
+
+/* ===== Enter ===== */
+function enter(){
+  const ui=$("#userInfo");
+  if (ui && SESSION) {
+    const nm = SESSION.full_name || SESSION.username || "";
+    const dp = SESSION.department || "";
+    ui.textContent = dp ? `${nm}・${dp}` : nm;
+  }
+  ["btnToDash","btnToSales","btnToPlan","btnToShip","btnToInvPage","btnToFinPage","btnToInvoice","btnToCharts","btnToShipped"]
+  .forEach(id=>{ const el=$("#"+id); if(el) el.classList.remove("hidden"); });
+
+  const dd=$("#ddSetting"); if(dd) dd.classList.remove("hidden");
+  if(!(SESSION.role==="admin" || SESSION.department==="生産技術")){
+    const miAddUser=$("#miAddUser"); if(miAddUser) miAddUser.classList.add("hidden");
+  }
+  show("pageDash");
+  loadMasters();
+  requestIdleCallback(()=> { refreshAll(); populateChubanFromSales(); }, {timeout:1000});
+}
+
+/* ===== Auth ===== */
+async function onLogin(){
+  const u = $("#inUser") ? $("#inUser").value.trim() : "";
+  const p = $("#inPass") ? $("#inPass").value.trim() : "";
+  if(!u || !p){ alert("ユーザー名とパスワードを入力してください"); return; }
+  try{
+    const r = await apiPost("login", { username:u, password:p });
+    if (!r || !r.username) throw new Error("ログイン情報が無効です（username 不明）");
+    SESSION = {
+      username: r.username,
+      full_name: r.full_name || r.name || r.username,
+      department: r.department || "",
+      role: r.role || "member",
+      token: r.token || ""
+    };
+    localStorage.setItem("erp_session", JSON.stringify(SESSION));
+    enter();
+  }catch(e){
+    alert(e.message || e);
+  }
+}
+async function addUserFromLoginUI(){
+  if(!SESSION) return alert("ログインしてください");
+  if(!(SESSION.role==="admin"||SESSION.department==="生産技術")) return alert("権限不足（生産技術）");
+  const payload={
+    username:$("#nuUser")?$("#nuUser").value.trim():"", password:$("#nuPass")?$("#nuPass").value.trim():"",
+    full_name:$("#nuName")?$("#nuName").value.trim():"", department:$("#nuDept")?$("#nuDept").value:"", role:$("#nuRole")?$("#nuRole").value:"member"
+  };
+  if(!payload.username||!payload.password||!payload.full_name) return alert("必須項目");
+  try{ await apiPost("createUser",{user:SESSION,payload}); alert("作成しました"); }
+  catch(e){ alert(e.message||e); }
+}
+async function changePasswordUI(){
+  if(!SESSION) return alert("ログインしてください");
+  const oldPass=prompt("旧パスワード:"); if(oldPass===null) return;
+  const newPass=prompt("新パスワード:"); if(newPass===null) return;
+  try{
+    await apiPost("changePassword",{user:SESSION,oldPass,newPass});
+    alert("変更しました。再ログインしてください。");
+    SESSION=null; localStorage.removeItem("erp_session"); location.reload();
+  }catch(e){ alert(e.message||e); }
+}
+
+/* ===== Masters ===== */
+async function loadMasters(){
+  try{
+    const m = await apiGet({action:"masters", types:"得意先,品名,品番,図番,送り先,運送会社,機種"},{swrKey:"masters"});
+    const fill = (sel, arr)=>{ const el=$(sel); if(el) el.innerHTML=(arr||[]).map(v=>`<option value="${v}"></option>`).join(""); };
+    fill("#dl_tokui",     m["得意先"]);
+    fill("#dl_hinmei",    m["品名"]);
+    fill("#dl_hinban",    m["品番"]);
+    fill("#dl_zuban",     m["図番"]);
+    fill("#dl_okurisaki", m["送り先"]);
+    fill("#dl_unso",      m["運送会社"]);
+    fill("#dl_kishu",     m["機種"]);
+  }catch(e){ console.warn(e); }
+}
+
+/* ===== Dashboard ===== */
+async function refreshAll(keep=false){
+  try{
+    const s=await apiGet({action:"stock"},{swrKey:"stock"});
+    $("#statFinished").textContent=s.finishedStock;
+    $("#statReady").textContent=s.ready;
+    $("#statShipped").textContent=s.shipped;
+
+    const listToday=$("#listToday");
+    if(listToday) listToday.innerHTML='<div class="shimmer" style="height:16px;border-radius:8px"></div>';
+    const today=await apiGet({action:"todayShip"},{swrKey:"todayShip"});
+    if(listToday){
+      listToday.innerHTML = today.length ? today.map(r=>`<div><span>${r.po_id}</span><span>${fmtD(r.scheduled_date)}・${r.qty}</span></div>`).join("") : '<div class="muted">本日予定なし</div>';
+    }
+
+    const grid=$("#gridProc");
+    if(grid) grid.innerHTML = PROCESSES.map(()=>`<div class="shimmer" style="height:26px;border-radius:8px"></div>`).join("");
+    const loc=await apiGet({action:"locSnapshot"},{swrKey:"locSnapshot"});
+    if(grid) grid.innerHTML = PROCESSES.map(p=> `
+      <div class="grid-chip" style="font-weight:700;color:#0b3b6a">
+        <div class="muted s" style="font-weight:600;color:#475569">${p}</div>
+        <div class="h" style="font-size:18px">${loc[p]||0}</div>
+      </div>`).join("");
+
+    if(!keep){ const q=$("#searchQ"); if(q) q.value=""; }
+    await renderOrders();
+    await renderSales();
+  }catch(e){ console.error(e); }
+}
+
+/* ===== Orders table ===== */
+async function listOrders(){
+  const qEl=$("#searchQ"); const q = qEl ? qEl.value.trim() : "";
+  return apiGet({action:"listOrders",q},{swrKey:"orders"+(q?":"+q:"")});
+}
+async function renderOrders(){
+  const tbody=$("#tbOrders"); if(!tbody) return;
+  tableSkeleton(tbody, 7, 10);
+  const rows=await listOrders();
+  const frag=document.createDocumentFragment();
+  rows.forEach(r=>{
+    const tr=document.createElement("tr");
+    const statusName = r.status || ""; const procName = r.current_process || "";
+    const stClass = STATUS_CLASS[statusName] || "st-begin"; const prClass = PROC_CLASS[procName] || "prc-out";
+
+    const leftCell = `
+      <div class="row-main">
+        <a href="javascript:void(0)" onclick="openTicket('${r.po_id}')" class="link"><b>${r.po_id}</b></a>
+        <div class="row-sub">
+          <div class="kv"><span class="muted">得意先:</span> <b>${r["得意先"]||"-"}</b></div>
+          ${r["製番号"]?`<div class="kv"><span class="muted">製番号:</span> <b>${r["製番号"]}</b></div>`:""}
+          ${(r["品番"]||r["図番"])?`<div class="kv"><span class="muted">品番/図番:</span> <b>${r["品番"]||""}/${r["図番"]||""}</b></div>`:""}
+        </div>
+      </div>`;
+
+    const statusBadge = `<span class="badge ${stClass}"><span class="dot"></span><span>${statusName||"-"}</span></span>`;
+    const procBadge   = `<span class="badge ${prClass}"><span class="dot"></span><span>${procName||"-"}</span></span>`;
+
+    const actions = `
+      <div class="actions-2col">
+        <button class="btn ghost s" onclick="openTicket('${r.po_id}')"><i class="fa-regular fa-file-lines"></i> 票</button>
+        <button class="btn ghost s" onclick="startScanFor('${r.po_id}')"><i class="fa-solid fa-qrcode"></i> 更新</button>
+        <button class="btn ghost s" onclick="openShipByPO('${r.po_id}')"><i class="fa-solid fa-truck"></i> 出荷票</button>
+        <button class="btn ghost s" onclick="openHistory('${r.po_id}')"><i class="fa-solid fa-clock-rotate-left"></i> 履歴</button>
+      </div>`;
+
+    tr.innerHTML = `
+      <td>${leftCell}</td>
+      <td>${r["品名"]||""}</td>
+      <td>${r["品番"]||""}</td>
+      <td>${r["図番"]||""}</td>
+      <td>${r["機種"]||""}</td>
+      <td class="col-status">${statusBadge}</td>
+      <td class="col-proc">${procBadge}</td>
+      <td class="s muted">${fmtDT(r.updated_at)}</td>
+      <td class="s muted">${r.updated_by||""}</td>
+      <td class="s">${actions}</td>
+    `;
+    frag.appendChild(tr);
+  });
+  clearSkeleton(tbody); tbody.appendChild(frag);
+}
+
+/* ===== Plan list ===== */
+async function renderPlanList(){
+  const tbody = $("#tbPlan"); if(!tbody) return;
+  tableSkeleton(tbody, 8, 9);  // +1 kolom 機種
+  const qEl=$("#planQ"); const q=(qEl&&qEl.value)? qEl.value.trim():"";
+  const rows = await apiGet({action:"listOrders", q},{swrKey:"orders"+(q?":"+q:"")});
+  const html = (rows||[]).map(r=>{
+    const nyu = r["投入日"] ? new Date(r["投入日"]).toLocaleDateString() : "-";
+    return `<tr>
+      <td><a href="javascript:void(0)" onclick="openTicket('${r.po_id}')" class="link"><b>${r.po_id}</b></a><div class="row-sub"><span class="muted">得意先:</span> ${r["得意先"]||"-"}</div></td>
+      <td>${r["品名"]||""}</td><td>${r["品番"]||""}</td><td>${r["図番"]||""}</td>
+      <td>${r["機種"]||""}</td>
+      <td class="s muted">${nyu}</td>
+      <td>${r.status||""}</td><td>${r.current_process||""}</td>
+      <td class="s muted">${fmtDT(r.updated_at)}</td>
+    </tr>`;
+  }).join("");
+  clearSkeleton(tbody); tbody.innerHTML = html;
+}
+
+/* ===== Shipped list ===== */
+async function renderShippedList(){
+  const tbody = $("#tbShipped"); if(!tbody) return;
+  tableSkeleton(tbody, 8, 9);
+
+  // Prefer: server memfilter status=出荷済. Fallback client-side.
+  let rows = [];
+  try{
+    rows = await apiGet({ action:"listOrders", status:"出荷済" }, { swrKey:"orders:shipped" });
+  }catch(_){
+    const all = await apiGet({ action:"listOrders" }, { swrKey:"orders" });
+    rows = (all||[]).filter(r=> r.status === "出荷済");
+  }
+
+  const qEl = $("#shippedQ");
+  let q = qEl ? qEl.value.trim() : "";
+  if (q) {
+    rows = rows.filter(r =>
+      String(r.po_id||"").includes(q) ||
+      String(r["得意先"]||"").includes(q) ||
+      String(r["品名"]||"").includes(q) ||
+      String(r["品番"]||"").includes(q) ||
+      String(r["図番"]||"").includes(q)
+    );
+  }
+
+  const html = rows.map(r=>`
+    <tr>
+      <td><a class="link" href="javascript:void(0)" onclick="openTicket('${r.po_id}')"><b>${r.po_id}</b></a></td>
+      <td>${r["得意先"]||""}</td>
+      <td>${r["品名"]||""}</td>
+      <td>${r["品番"]||""}</td>
+      <td>${r["図番"]||""}</td>
+      <td>${r["機種"]||""}</td>
+      <td>${r["数量"]||0}</td>
+      <td><span class="badge ${STATUS_CLASS[r.status]||"st-shipped"}">${r.status||""}</span></td>
+      <td class="s muted">${fmtDT(r.updated_at)}</td>
+    </tr>
+  `).join("");
+
+  clearSkeleton(tbody);
+  tbody.innerHTML = html;
+}
+// === util: multi 注番 ===
+function parseMultiIds(raw){
+  return String(raw||"")
+    .split(/[\s,;\n\r\t]+/)
+    .map(s=>s.trim())
+    .filter(Boolean);
+}
+
+/* ===== Sales (営業) ===== */
+async function renderSales(){
+  const tbody=$("#tbSales"); if(!tbody) return;
+  tableSkeleton(tbody, 7, 10);
+  const qEl=$("#salesQ"); const q=(qEl&&qEl.value)? qEl.value.trim():"";
+  const rows=await apiGet({action:"listSales",q},{swrKey:"sales"+(q?":"+q:"")});
+ tbody.innerHTML = rows.map(r=> `
+  <tr>
+    <td>${r.so_id||""}</td>
+    <td class="s muted">${fmtD(r["受注日"])}</td>
+    <td>${r["得意先"]||""}</td>
+    <td>${r["品名"]||""}</td>
+    <td>${(r["品番"]||"")}/${(r["図番"]||"")}</td>
+    <td>${r["機種"]||""}</td>
+    <td>${r["数量"]||0}</td>
+    <td class="s muted">${fmtD(r["希望納期"])}</td>
+    <td><span class="badge">${r.status||""}</span></td>
+    <td>${r["linked_po_id"]||""}</td>
+    <td class="s muted">${fmtDT(r["更新日時"]||r["updated_at"])}</td>
+  </tr>`).join("");
+
+}
+
+/* ==== Sales CRUD / Actions ==== */
+async function saveSalesUI(){
+  if(!(SESSION && (SESSION.role==="admin" || ["生産技術","生産管理部","営業"].includes(SESSION.department||"")))){
+    alert("権限不足"); return;
+  }
+  const so_id   = $("#so_id")?.value.trim() || "";
+  const recv    = $("#so_date")?.value || "";
+  const cust    = $("#so_cust")?.value?.trim?.() || $("#so_cust")?.value?.trim?.() || "";
+  const item    = $("#so_item")?.value.trim() || "";
+  const part    = $("#so_part")?.value.trim() || "";
+  const drw     = $("#so_drw")?.value.trim()  || "";
+  const sei     = $("#so_sei")?.value.trim()  || "";
+  const qty     = Number($("#so_qty")?.value || 0) || 0;
+  const due     = $("#so_req")?.value || "";
+  const note    = $("#so_note")?.value || "";
+  const status  = $("#so_status")?.value || "";
+  const kishu   = $("#so_kishu")?.value.trim() || "";
+
+  const linked0   = $("#so_linked_po")?.value?.trim?.() || "";
+  const linkedList= parseMultiIds(linked0);
+
+  // <- ERROR di sini sebelumnya: tidak ada penutup "}" dan koma
+  const payload = {
+    "受注日": recv,
+    "得意先": cust,
+    "品名": item,
+    "品番": part,
+    "図番": drw,
+    "製番号": sei,
+    "数量": qty,
+    "希望納期": due,
+    "備考": note,
+    status,
+    "linked_po_id": linkedList.join(","), // multi 注番
+    "機種": kishu
+  };
+
+  try{
+    if(so_id){
+      await apiPost("updateSalesOrder", { so_id, updates: payload, user: SESSION });
+      alert("営業データを更新しました");
+    }else{
+      const r = await apiPost("createSalesOrder", { payload, user: SESSION });
+      alert("営業データを作成: " + (r.so_id || ""));
+      if($("#so_id")) $("#so_id").value = r.so_id || "";
+    }
+    await renderSales();
+    await populateChubanFromSales();
+  }catch(e){ alert(e.message||e); }
+}
+
+async function deleteSalesUI(){
+  if(!(SESSION && (SESSION.role==="admin" || ["生産技術","生産管理部","営業"].includes(SESSION.department||"")))){
+    alert("権限不足"); return;
+  }
+  const so_id = $("#so_id")?.value.trim() || prompt("削除する受注番号（SO）を入力:");
+  if(!so_id) return;
+  if(!confirm("削除しますか？")) return;
+  try{
+    const r = await apiPost("deleteSalesOrder", { so_id, user: SESSION });
+    alert("削除: " + (r.deleted || so_id));
+    if($("#so_id")) $("#so_id").value = "";
+    await renderSales();
+    await populateChubanFromSales();
+  }catch(e){ alert(e.message||e); }
+}
+
+async function promoteSalesUI(){
+  if(!(SESSION && (SESSION.role==="admin" || ["生産技術","生産管理部"].includes(SESSION.department||"")))){
+    alert("権限不足"); return;
+  }
+  const so_id = $("#so_id")?.value.trim() || prompt("受注番号（SO）:");
+  if(!so_id) return;
+  try{
+    const r = await apiPost("promoteSalesToPlan", { so_id, user: SESSION });
+    alert(`注番へ昇格しました: SO=${so_id} → PO=${r.po_id||"(不明)"}`);
+    await refreshAll(true);
+    await populateChubanFromSales();
+  }catch(e){ alert(e.message||e); }
+}
+
+async function exportSalesCSV(){
+  try{
+    const qEl=$("#salesQ"); const q=(qEl&&qEl.value)? qEl.value.trim():"";
+    const rows = await apiGet({action:"listSales", q},{swrKey:"sales"+(q?":"+q:"")});
+    downloadCSV("sales.csv", rows||[]);
+  }catch(e){ alert(e.message||e); }
+}
+
+/* ===== 注番 selector from 受注 ===== */
+async function populateChubanFromSales(){
+  const dl = document.getElementById("dl_po_from_so"); if(!dl) return;
+  try{
+    const rows = await apiGet({action:"listSales"},{swrKey:"sales"});
+    dl.innerHTML = (rows||[]).map(r=> `<option value="${r.so_id||""}" label="${(r["得意先"]||"") + " / " + (r["品名"]||"")}"></option>`).join("");
+  }catch(e){ console.warn("dl_po_from_so:", e); }
+}
+function initChubanSelector(){
+  const sel = document.getElementById("poSource");
+  const input = document.getElementById("c_po");
+  if(!sel || !input) return;
+  sel.addEventListener("change", ()=>{
+    const v = sel.value;
+    if(v==="so"){ input.setAttribute("list","dl_po_from_so"); input.placeholder="注番（受注から選択）"; }
+    if(v==="manual"){ input.removeAttribute("list"); input.placeholder="注番（手入力）"; }
+    if(v==="blank"){ input.removeAttribute("list"); input.value=""; input.placeholder="注番（空欄可）"; }
+  });
+  sel.dispatchEvent(new Event("change"));
+}
+
+/* ===== Plan CRUD ===== */
+async function createOrderUI(){
+  if(!(SESSION && (SESSION.role==="admin"||SESSION.department==="生産技術"||SESSION.department==="生産管理部"))) {
+    alert("権限不足"); return;
+  }
+  const p = {
+    "得意先": ($("#c_tokui")?.value || "").trim(),
+    "製番号": ($("#c_sei")?.value || "").trim(),
+    "品名"  : ($("#c_hinmei")?.value || "").trim(),
+    "品番"  : ($("#c_hinban")?.value || "").trim(),
+    "図番"  : ($("#c_zuban")?.value || "").trim(),
+    "機種"  : ($("#c_kishu")?.value || "").trim(),
+    "数量"  : Number($("#c_qty")?.value || 0) || 0,
+    "投入日": ($("#c_nyu")?.value || "")
+  };
+
+  const editingPoEl = $("#c_po");
+  const editingPo   = editingPoEl ? editingPoEl.value.trim() : "";
+  const rawPO       = $("#c_po")?.value.trim() || "";
+  const poList      = parseMultiIds(rawPO);
+
+  try{
+    if (editingPo){
+      await apiPost("updateOrder", { po_id: editingPo, updates: p, user: SESSION });
+      alert("編集保存しました");
+    } else if (poList.length > 1){
+      for (const _ of poList){
+        await apiPost("createOrder", { payload: { ...p, "数量": 1 }, user: SESSION });
+      }
+      alert(`作成：${poList.length}件（複数注番）`);
+    } else {
+      const r = await apiPost("createOrder", { payload: p, user: SESSION });
+      alert("作成: " + r.po_id);
+      if (editingPoEl) editingPoEl.value = r.po_id;
+    }
+    refreshAll(); renderPlanList().catch(()=>{});
+  }catch(e){ alert(e.message || e); }
+}
+async function loadOrderForEdit(){
+  const poEl = $("#c_po"); const po = poEl ? poEl.value.trim() : "";
+  if(!po){ alert("注番入力"); return; }
+  try{
+    const o = await apiGet({action:"ticket", po_id:po});
+    const set = (sel, v)=>{ const el=$(sel); if(el) el.value = v ?? ""; };
+    set("#c_tokui", o["得意先"]);
+    set("#c_sei",   o["製番号"]);
+    set("#c_hinmei",o["品名"]);
+    set("#c_hinban",o["品番"]);
+    set("#c_zuban", o["図番"]);
+    set("#c_kishu", o["機種"]);        // NEW
+    set("#c_qty",   o["数量"] || 0);
+    set("#c_nyu",  o["投入日"] ? String(o["投入日"]).slice(0,10) : "");
+    alert("読み込み完了。");
+  }catch(e){ alert(e.message || e); }
+}
+async function deleteOrderUI(){
+  if(!(SESSION && (SESSION.role==="admin"||SESSION.department==="生産技術"||SESSION.department==="生産管理部"))) {
+    alert("権限不足"); return;
+  }
+  const poEl = $("#c_po"); const po = poEl ? poEl.value.trim() : "";
+  if(!po){ alert("注番入力"); return; }
+  if(!confirm("削除しますか？")) return;
+  try{
+    const r = await apiPost("deleteOrder", { po_id: po, user: SESSION });
+    alert("削除:" + r.deleted);
+    refreshAll();
+  }catch(e){ alert(e.message || e); }
+}
+
+/* ===== Ship CRUD ===== */
+async function scheduleUI(){
+  if(!(SESSION && (SESSION.role==="admin"||SESSION.department==="生産技術"||SESSION.department==="生産管理部")))
+    return alert("権限不足");
+
+  const po     = $("#s_po")?.value.trim() || "";
+  const poList = parseMultiIds(po);
+  const sdate  = $("#s_date")?.value || "";
+  const ddate  = $("#s_delivery")?.value || "";
+  const qty    = Number($("#s_qty")?.value || 0) || 0;
+
+  const cust = $("#s_cust")?.value.trim() || "";
+  const item = $("#s_item")?.value.trim() || "";
+  const part = $("#s_part")?.value.trim() || "";
+  const drw  = $("#s_drw")?.value.trim()  || "";
+  const kishu= $("#s_kishu")?.value.trim() || "";
+  const dest = $("#s_dest")?.value.trim() || "";
+  const unso = $("#s_carrier")?.value.trim() || "";
+
+  if(!po || !sdate) return alert("注番と出荷日");
+
+  const idEl  = $("#s_shipid");
+  const shipId= idEl ? idEl.value.trim() : "";
+
+  try{
+    if (shipId){
+      await apiPost("updateShipment",{
+        ship_id: shipId,
+        updates:{
+          po_id: po,
+          scheduled_date: sdate,
+          delivery_date: ddate,
+          qty,
+          得意先: cust, 品名: item, 品番: part, 図番: drw, 送り先: dest, 運送会社: unso, 機種: kishu
+        },
+        user: SESSION
+      });
+      alert("出荷予定を編集しました");
+      broadcastDataChange('ship');
+    } else {
+      const list = poList.length ? poList : [po];
+      for (const one of list){
+        await apiPost("scheduleShipment",{
+          po_id: one, dateIso: sdate, deliveryIso: ddate, qty,
+          customer: cust, item, part, drw, dest, carrier: unso, kishu, user: SESSION
+        });
+      }
+      alert(`登録: 出荷予定 × ${list.length}`);
+      broadcastDataChange('ship');
+    }
+
+    refreshAll(true);
+    renderShipList().catch(()=>{});
+  }catch(e){ alert(e.message||e); }
+}
+
+
+async function loadShipForEdit(){
+  const idEl=$("#s_shipid"); const sid=idEl?idEl.value.trim():"";
+  if(!sid) return alert("出荷ID入力");
+  try{
+    const d=await apiGet({action:"shipById",ship_id:sid});
+    const set=(id,v)=>{ const el=$(id); if(el) el.value=v||""; };
+    set("#s_po", d.shipment.po_id||"");
+    set("#s_date", d.shipment.scheduled_date? new Date(d.shipment.scheduled_date).toISOString().slice(0,10):"");
+    set("#s_qty", d.shipment.qty||0);
+    alert("読み込み完了。");
+  }catch(e){ alert(e.message||e); }
+}
+async function deleteShipUI(){
+  if(!(SESSION && (SESSION.role==="admin"||SESSION.department==="生産技術"||SESSION.department==="生産管理部"))) 
+    return alert("権限不足");
+  const idEl=$("#s_shipid"); 
+  const sid=idEl?idEl.value.trim():"";
+  if(!sid) return alert("出荷ID入力");
+  if(!confirm("削除しますか？")) return;
+
+  try{
+    const r = await apiPost("deleteShipment",{ship_id:sid,user:SESSION});
+    alert("削除:"+r.deleted);
+    broadcastDataChange('ship');       // sinkron tab lain
+    refreshAll(true);
+    renderShipList().catch(()=>{});
+  }catch(e){
+    alert(e.message||e);
+  }
+}
+
+async function openShipByPO(po){
+  try{
+    const d=await apiGet({action:"shipByPo",po_id:po});
+    showShipDoc(d.shipment, d.order);
+  }catch(e){ alert(e.message||e); }
+}
+async function openShipByID(id){
+  try{
+    const d=await apiGet({action:"shipById",ship_id:id});
+    showShipDoc(d.shipment, d.order);
+  }catch(e){ alert(e.message||e); }
+}
+function showShipDoc(s,o){
+  const dt=s.scheduled_date? new Date(s.scheduled_date):null;
+  const body=`<h3>出荷確認書</h3><table>
+    <tr><th>得意先</th><td>${o["得意先"]||""}</td><th>出荷日</th><td>${dt?dt.toLocaleDateString():"-"}</td></tr>
+    <tr><th>注番</th><td>${s.po_id}</td><th>数量</th><td>${s.qty||0}</td></tr>
+    <tr><th>品名</th><td>${o["品名"]||""}</td><th>品番/図番</th><td>${(o["品番"]||"")+" / "+(o["図番"]||"")}</td></tr>
+    <tr><th>状態</th><td colspan="3">${o.status||""}</td></tr></table>`;
+  showDoc("dlgShip", body);
+}
+
+/* ===== Docs ===== */
+async function openTicket(po_id){
+  try{
+    const o=await apiGet({action:"ticket",po_id});
+    const body=`<h3>生産現品票</h3><table>
+      <tr><th>管理No</th><td>${o["管理No"]||"-"}</td><th>通知書番号</th><td>${o["通知書番号"]||"-"}</td></tr>
+      <tr><th>得意先</th><td>${o["得意先"]||""}</td><th>得意先品番</th><td>${o["得意先品番"]||""}</td></tr>
+      <tr><th>製番号</th><td>${o["製番号"]||""}</td><th>投入日</th><td>${o["created_at"]?new Date(o["created_at"]).toLocaleDateString():"-"}</td></tr>
+      <tr><th>品名</th><td>${o["品名"]||""}</td><th>品番/図番</th><td>${(o["品番"]||"")+" / "+(o["図番"]||"")}</td></tr>
+      <tr><th>工程</th><td colspan="3">${o.current_process||""}</td></tr>
+      <tr><th>状態</th><td>${o.status||""}</td><th>更新</th><td>${fmtDT(o.updated_at)} / ${o.updated_by||""}</td></tr></table>`;
+    showDoc("dlgTicket",body);
+  }catch(e){ alert(e.message||e); }
+}
+function showDoc(id, html){
+  const dlg=document.getElementById(id);
+  if(!dlg) return;
+  const body=dlg.querySelector(".body"); if(body) body.innerHTML=html;
+  dlg.showModal();
+}
+
+/* ==== History ==== */
+async function openHistory(po_id){
+  try{
+    const data=await apiGet({action:"history",po_id});
+    const rows=(data||[]).map(x=>`
+      <div class="row s" style="gap:.5rem;border-bottom:1px solid var(--border);padding:.25rem 0">
+        <span class="muted">${fmtDT(x.timestamp)}</span>
+        <span>${x.updated_by||""}</span>
+        <span class="badge ${STATUS_CLASS[x.new_status]||"st-begin"}">${x.prev_status||""} → ${x.new_status||""}</span>
+        <span class="badge ${PROC_CLASS[x.new_process]||"prc-out"}">${x.prev_process||""} → ${x.new_process||""}</span>
+        ${x.note?`<span class="muted">「${x.note}」</span>`:""}
+      </div>`).join("");
+    const html=`<h3>更新履歴（注番: ${po_id}）</h3>
+      <div class="row gap" style="margin:.35rem 0">
+        <button class="btn ghost s" onclick="exportHistoryCSV()"><i class="fa-solid fa-file-csv"></i> CSV</button>
+      </div>
+      <div id="histBody">${rows||'<div class="muted s">履歴なし</div>'}</div>`;
+    showDoc("dlgHistory", html);
+    window._histForCSV = data||[];
+  }catch(e){ alert(e.message||e); }
+}
+function exportHistoryCSV(){
+  const data = window._histForCSV||[];
+  downloadCSV("history.csv", data);
+}
+
+/* ===== QR Station & Scan ===== */
+function openStationQR(){
+  const dlg=$("#dlgStationQR"); const wrap=$("#qrWrap"); if(!dlg||!wrap) return;
+  wrap.innerHTML = PROCESSES.map(p=>`<div id="qr-${p}" style="display:flex;flex-direction:column;align-items:center;gap:.35rem">
+      <div class="muted s">${p}</div><div class="qrbox" data-text="ST:${p}"></div></div>`).join("");
+  dlg.showModal();
+  setTimeout(()=>{
+    wrap.querySelectorAll(".qrbox").forEach(div=>{
+      const t=div.dataset.text;
+      new QRCode(div,{text:t,width:120,height:120});
+    });
+  },0);
+}
+
+/* ---- FIX: ユーザー追加 dari menu 設定 (bukan alert) ---- */
+function openAddUserModal(){
+  // kalau dialog tidak ada (index lama), fallback info
+  const dlg = $("#dlgAddUser");
+  if (!dlg) { alert("ユーザー追加は管理者メニューから利用できます。（dialog が見つかりません）"); return; }
+
+  if (!SESSION) { alert("ログインしてください"); return; }
+  if (!(SESSION.role==="admin" || SESSION.department==="生産技術")) {
+    alert("権限不足（管理者または生産技術のみ）"); return;
+  }
+
+  // reset field
+  ["nuUser","nuPass","nuName"].forEach(id => { const el=$("#"+id); if(el) el.value=""; });
+  dlg.showModal();
+
+  // bind tombol 追加 (hindari double listener)
+  const btn = $("#btnAddUserSave");
+  if (btn) {
+    btn.replaceWith(btn.cloneNode(true));
+    const btn2 = $("#btnAddUserSave");
+    bindTap(btn2, addUserFromSettings);
+  }
+}
+async function addUserFromSettings(){
+  const payload={
+    username:$("#nuUser")?.value.trim()||"",
+    password:$("#nuPass")?.value.trim()||"",
+    full_name:$("#nuName")?.value.trim()||"",
+    department:$("#nuDept")?.value||"",
+    role:$("#nuRole")?.value||"member"
+  };
+  if(!payload.username||!payload.password||!payload.full_name){ alert("必須項目を入力してください"); return; }
+  try{
+    await apiPost("createUser",{user:SESSION,payload});
+    $("#dlgAddUser")?.close();
+    alert("ユーザーを追加しました");
+  }catch(e){ alert(e.message||e); }
+}
+/* ----------------------------------------------- */
+
+function startScanFor(po){
+  CURRENT_PO=po;
+  const dlg=$("#dlgScan"); if(!dlg) return;
+  dlg.showModal();
+  $("#scanPO").textContent=po;
+  initScan();
+}
+async function initScan(){
+  const video=$("#scanVideo"), canvas=$("#scanCanvas"), result=$("#scanResult");
+  if(!video||!canvas) return;
+  try{
+    scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+    video.srcObject=scanStream; await video.play();
+    const ctx=canvas.getContext("2d");
+    scanTimer = setInterval(async ()=>{
+      if(video.readyState!==video.HAVE_ENOUGH_DATA) return;
+      canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+      ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+      const code=jsQR(img.data, img.width, img.height);
+      if(code && code.data){
+        result.textContent="読み取り: "+code.data;
+        const token=String(code.data||"");
+        const [prefix, station] = token.split(":");
+        if(prefix==="ST" && station && CURRENT_PO){
+          const ok = Number($("#man_ok")?$("#man_ok").value:"")||0;
+          const ng = Number($("#man_ng")?$("#man_ng").value:"")||0;
+          try{
+            const o = await apiGet({ action:"ticket", po_id: CURRENT_PO });
+            const rule = STATION_RULES[station] || (_o => ({ current_process: station }));
+            const updates = Object.assign({ ok_qty: ok, ng_qty: ng }, rule(o) || {});
+            await apiPost("updateOrder", { po_id: CURRENT_PO, updates, user: SESSION });
+            broadcastDataChange('orders');
+            alert("更新しました");
+            refreshAll(true);
+          }catch(e){ alert(e.message||e); }
+        }
+        stopScan();
+        $("#dlgScan").close();
+      }
+    }, 300);
+  }catch(e){ alert("カメラ起動不可: "+(e.message||e)); }
+}
+function stopScan(){
+  if(scanTimer){ clearInterval(scanTimer); scanTimer=null; }
+  if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
+}
+
+/* ===== Inventory & Finished ===== */
+async function renderInventory(){
+  const tbody=$("#tbInv"); if(!tbody) return;
+  tableSkeleton(tbody, 8, 9);
+  const qEl=$("#invQ"); const q=(qEl&&qEl.value)? qEl.value.trim():"";
+  const rows=await apiGet({action:"listInventory",q},{swrKey:"inv"+(q?":"+q:"")});
+  tbody.innerHTML = rows.map(r=> `
+    <tr>
+      <td>
+        <div class="row-main">
+          <b>${r.po_id}</b>
+          <div class="row-sub">
+            <div class="kv"><span class="muted">得意先:</span> <b>${r["得意先"]||"-"}</b></div>
+          </div>
+        </div>
+      </td>
+      <td>${r["品名"]||""}</td>
+      <td>${r["品番"]||""}</td>
+      <td>${r["図番"]||""}</td>
+      <td>${r["機種"]||""}</td>
+      <td><span class="badge ${STATUS_CLASS[r.status]||"st-begin"}">${r.status||""}</span></td>
+      <td><span class="badge ${PROC_CLASS[r.current_process]||"prc-out"}">${r.current_process||""}</span></td>
+      <td class="s muted">${fmtDT(r.updated_at)}</td>
+      <td class="s muted">${r.updated_by||""}</td>
+    </tr>`).join("");
+}
+async function renderFinished(){
+  const tbody=$("#tbFin"); if(!tbody) return;
+  tableSkeleton(tbody, 8, 9);
+  const qEl=$("#finQ"); const q=(qEl&&qEl.value)? qEl.value.trim():"";
+  const rows=await apiGet({action:"listFinished",q},{swrKey:"fin"+(q?":"+q:"")});
+  tbody.innerHTML = rows.map(r=> `
+    <tr>
+      <td>
+        <div class="row-main">
+          <b>${r.po_id}</b>
+          <div class="row-sub">
+            <div class="kv"><span class="muted">得意先:</span> <b>${r["得意先"]||"-"}</b></div>
+          </div>
+        </div>
+      </td>
+      <td>${r["品名"]||""}</td>
+      <td>${r["品番"]||""}</td>
+      <td>${r["図番"]||""}</td>
+      <td>${r["機種"]||""}</td>
+      <td><span class="badge ${STATUS_CLASS[r.status]||"st-begin"}">${r.status||""}</span></td>
+      <td><span class="badge ${PROC_CLASS[r.current_process]||"prc-out"}">${r.current_process||""}</span></td>
+      <td class="s muted">${fmtDT(r.updated_at)}</td>
+      <td class="s muted">${r.updated_by||""}</td>
+    </tr>`).join("");
+}
+
+/* ===== Ship List (table) ===== */
+async function renderShipList(){
+  const tbody = $("#tbShipList"); if (!tbody) return;
+  tableSkeleton(tbody, 8, 12);
+
+  const params = { action:"listShipments" };
+  const cust = $("#shipCust")?.value?.trim();
+  const from = $("#shipFrom")?.value;
+  const to   = $("#shipTo")?.value;
+
+  if (cust) params.cust = cust;
+  if (from) params.from = from;
+  if (to)   params.to   = to;
+
+  // ambil data
+  const rows = await apiGet(params, { swrKey: "ship:"+[cust,from,to].join("|") }) || [];
+
+  // sort: hari ini di atas (desc by 出荷日, lalu terbaru)
+  rows.sort((a,b)=>{
+    const ad = new Date(a["出荷日"]||a.ship_date||0).getTime();
+    const bd = new Date(b["出荷日"]||b.ship_date||0).getTime();
+    if (bd !== ad) return bd - ad;
+    const at = new Date(a.updated_at||0).getTime();
+    const bt = new Date(b.updated_at||0).getTime();
+    return bt - at;
+  });
+
+  const fmt = (d)=> d ? new Date(d).toLocaleDateString() : "-";
+
+  const html = rows.map(r=>`
+    <tr>
+      <td class="s">${fmt(r["出荷日"]||r.ship_date)}</td>
+      <td><a class="link" href="javascript:void(0)" onclick="openShipByID('${r["出荷ID"]||r.ship_id||""}')">${r["注番"]||r.po_id||""}</a></td>
+      <td>${r["得意先"]||r.customer||""}</td>
+      <td>${r["品名"]||r.item||""}</td>
+      <td>${r["品番"]||r.part||""}</td>
+      <td>${r["図番"]||r.draw||""}</td>
+      <td>${r["機種"]||r.kishu||""}</td>
+      <td>${Number(r["数量"]||r.qty||0)}</td>
+      <td class="s">${fmt(r["納入日"]||r.delivery_date)}</td>
+      <td>${r["送り先"]||r.dest||""}</td>
+      <td>${r["運送会社"]||r.carrier||""}</td>
+      <td class="s">${r["出荷ID"]||r.ship_id||""}</td>
+      <td class="s muted">${fmtDT(r.updated_at)}</td>
+    </tr>
+  `).join("");
+
+  clearSkeleton(tbody);
+  tbody.innerHTML = html;
+}
+
+/* ===== Invoice ===== */
+async function previewInvoiceUI(){
+  const info = {
+    customer: $("#inv_customer")?$("#inv_customer").value.trim():"",
+    from: $("#inv_from")?$("#inv_from").value:"",
+    to:   $("#inv_to")?$("#inv_to").value:"",
+  };
+  if(!info.from||!info.to) return alert("期間（自/至）を入力");
+
+  try{
+    const d = await apiGet({action:"previewInvoice",customer:info.customer,from:info.from,to:info.to});
+    INV_PREVIEW.info = {
+      得意先: d.info.得意先, 期間自: d.info.期間自, 期間至: d.info.期間至,
+      請求日: $("#inv_date")?($("#inv_date").value || new Date().toISOString().slice(0,10)) : new Date(),
+      通貨: $("#inv_currency")?$("#inv_currency").value:"JPY",
+      メモ: $("#inv_memo")?$("#inv_memo").value:""
+    };
+
+    // filter by multi-PO (optional)
+    const poFilter = parseMultiIds($("#inv_pos")?.value||"");
+    let lines = d.lines.map(l=> ({...l, 単価: l.単価||0, 金額: (l.数量||0)*(l.単価||0)}));
+    if (poFilter.length){
+      const set = new Set(poFilter);
+      lines = lines.filter(l=>{
+        const po = l.PO || l.POs || l.注番 || "";
+        return String(po).split(/[,\s]+/).some(x=> set.has(x));
+      });
+    }
+    INV_PREVIEW.lines = lines;
+
+    renderInvoiceLines();
+  }catch(e){ alert(e.message||e); }
+}
+
+function renderInvoiceLines(){
+  const tb=$("#invLines"); if(!tb) return;
+  let sub=0;
+  tb.innerHTML = INV_PREVIEW.lines.map((l,i)=>{
+    const amount = Number(l.数量||0)*Number(l.単価||0); sub+=amount;
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${l.品名||""}</td>
+      <td>${l.品番||""}</td>
+      <td>${l.図番||""}</td>
+      <td>${l.機種||l["機種"]||""}</td>
+      <td>${l.数量||0}</td>
+      <td contenteditable oninput="onInvPriceChange(${i}, this.innerText)">${l.単価||0}</td>
+      <td>${amount}</td>
+      <td>${l.PO||l.POs||l.注番||""}</td>
+      <td>${l.出荷ID||l.出荷IDs||""}</td>
+    </tr>`;
+  }).join("");
+  const tax=Math.round(sub*0.1), total=sub+tax;
+  $("#invSub").textContent=sub; $("#invTax").textContent=tax; $("#invTotal").textContent=total;
+}
+function onInvPriceChange(idx, v){
+  const price=Number(String(v).replace(/[^\d.]/g,""))||0;
+  if(!INV_PREVIEW.lines[idx]) return;
+  INV_PREVIEW.lines[idx].単価=price;
+  renderInvoiceLines();
+}
+async function createInvoiceUI(){
+  if(!(SESSION && (SESSION.role==="admin"||SESSION.department==="生産技術"||SESSION.department==="生産管理部"))) return alert("権限不足");
+  if(!INV_PREVIEW.info || !INV_PREVIEW.lines.length) return alert("先に集計してください");
+  try{
+    const payload={info: INV_PREVIEW.info, lines: INV_PREVIEW.lines};
+    const r=await apiPost("createInvoice",{payload,user:SESSION});
+    INV_PREVIEW.inv_id = r.inv_id;
+    alert(`発行しました: ${r.inv_id}（合計: ${r.合計}）`);
+  }catch(e){ alert(e.message||e); }
+}
+async function openInvoiceDoc(inv_id){
+  if(!inv_id){ alert("請求書IDがありません"); return; }
+  try{
+    const d=await apiGet({action:"invoiceDoc",inv_id});
+    const head=d.inv||{};
+    const body=`<h3>請求書</h3><table>
+      <tr><th>請求書</th><td>${head.inv_id}</td><th>請求日</th><td>${fmtD(head["請求日"])}</td></tr>
+      <tr><th>得意先</th><td>${head["得意先"]}</td><th>期間</th><td>${fmtD(head["期間自"])}〜${fmtD(head["期間至"])}</td></tr>
+      <tr><th>小計</th><td>${head["小計"]}</td><th>合計</th><td>${head["合計"]}</td></tr>
+    </table>
+    <h4>明細</h4>
+    <table><thead><tr><th>#</th><th>品名</th><th>数量</th><th>単価</th><th>金額</th><th>注番</th><th>出荷ID</th></tr></thead>
+    <tbody>${(d.lines||[]).map(l=>`<tr><td>${l["行No"]}</td><td>${l["品名"]}</td><td>${l["数量"]}</td><td>${l["単価"]}</td><td>${l["金額"]}</td><td>${l["PO"]||l["注番"]}</td><td>${l["出荷ID"]}</td></tr>`).join("")}</tbody></table>`;
+    showDoc("dlgTicket", body);
+  }catch(e){ alert(e.message||e); }
+}
+
+/* ===== Charts ===== */
+function ensureChartsLoaded(){ renderCharts().catch(console.warn); }
+function fillChartYearSelector(){
+  const sel=$("#chartYear"); if(!sel) return;
+  const y=(new Date()).getFullYear();
+  sel.innerHTML=[y-2,y-1,y,y+1].map(v=>`<option value="${v}" ${v===y?"selected":""}>${v}</option>`).join("");
+}
+async function renderCharts(){
+  try{
+    const ySel = document.getElementById("chartYear");
+    const yearHint = ySel && ySel.value ? Number(ySel.value) : null;
+    const data = await apiGet({action:"charts", year: yearHint||""}, {swrKey:"charts"+(yearHint||"")});
+
+    const mlabels = ["1","2","3","4","5","6","7","8","9","10","11","12"];
+
+    drawBar("chMonthly", mlabels, data.perMonth || [], "月別出荷数量");
+    const custLabels = Object.keys(data.perCust||{});
+    const custValues = custLabels.map(k=> data.perCust[k]);
+    drawPie("chCustomer", custLabels, custValues, "得意先別出荷");
+
+    const sbLabels = Object.keys(data.stockBuckets||{});
+    const sbValues = sbLabels.map(k=> data.stockBuckets[k]);
+    drawPie("chStock", sbLabels, sbValues, "在庫区分");
+
+    const wipLabels = Object.keys(data.wipByProcess||{});
+    const wipValues = wipLabels.map(k=> data.wipByProcess[k]);
+    drawBar("chWipProc", wipLabels, wipValues, "工程内WIP");
+
+    drawBar("chSales", mlabels, data.salesPerMonth || [], "営業 受注数");
+    drawBar("chPlan", mlabels, data.planPerMonth || [], "生産計画 作成数");
+  }catch(e){
+    console.error("Charts fail:", e);
+    showApiError("charts", e);
+  }
+}
+function drawBar(canvasId, labels, values, label){
+  const ctx = document.getElementById(canvasId);
+  if(!ctx) return;
+  if(ctx._chart){ ctx._chart.destroy(); }
+  ctx._chart = new Chart(ctx, {
+    type: "bar",
+    data: { labels, datasets: [{ label, data: values }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:true } } }
+  });
+}
+function drawPie(canvasId, labels, values, label){
+  const ctx = document.getElementById(canvasId);
+  if(!ctx) return;
+  if(ctx._chart){ ctx._chart.destroy(); }
+  ctx._chart = new Chart(ctx, {
+    type: "doughnut",
+    data: { labels, datasets: [{ label, data: values }] },
+    options: { responsive:true, maintainAspectRatio:false, cutout:"55%", plugins:{ legend:{ position:"bottom" } } }
+  });
+}
+
+/* ===== Import / Export ===== */
+function downloadCSV(filename, rows){
+  const head = rows && rows.length ? Object.keys(rows[0]) : [];
+  const csv = [head.join(","), ...(rows||[]).map(r=> head.map(h=> JSON.stringify(r[h]??"")).join(","))].join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}), url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+async function exportOrdersCSV(){ const rows=await apiGet({action:"listOrders"},{swrKey:"orders"}); downloadCSV("orders.csv", rows); }
+async function exportShipCSV(){ const rows=await apiGet({action:"todayShip"},{swrKey:"todayShip"}); downloadCSV("today_ship.csv", rows); }
+function exportInvoiceCSV(){
+  if (!INV_PREVIEW || !INV_PREVIEW.lines || !INV_PREVIEW.lines.length){
+    alert("先に「集計（出荷済）」を実行してください。");
+    return;
+  }
+  const head = ["#","品名","品番","図番","数量","単価","金額","注番","出荷ID"];
+  const rows = INV_PREVIEW.lines.map((l,i)=>({
+    "#": i+1, "品名": l.品名||"", "品番": l.品番||"", "図番": l.図番||"",
+    "数量": l.数量||0, "単価": l.単価||0, "金額": (Number(l.数量||0)*Number(l.単価||0))||0,
+    "注番": l.PO || l.注番 || l.POs || "", "出荷ID": l.出荷ID || l.出荷IDs || ""
+  }));
+  const csv = [head.join(","), ...rows.map(r=> head.map(h=> JSON.stringify(r[h]??"")).join(","))].join("\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = "invoice_lines.csv"; a.click();
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+function handleImport(e, type){
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  const isCSV = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+
+  reader.onload = async (ev) => {
+    const data = ev.target.result;
+    let rows = [];
+
+    if (isCSV) {
+      const text = String(data);
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      const head = (lines.shift() || "").split(",").map(h => h.replace(/^"|"$/g,""));
+      rows = lines.map(line=>{
+        const cols = line.match(/([^",\s]+|"[^"]*")(?=\s*,|\s*$)/g)?.map(x=> x.replace(/^"|"$/g,"")) || [];
+        const o = {}; head.forEach((h,i)=> o[h] = cols[i]);
+        return o;
+      });
+    } else {
+      const wb = XLSX.read(new Uint8Array(data), { type:"array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws);
+    }
+
+    try {
+      if (type === "sales")  await apiPost("importSales",     { rows, user: SESSION, mode: "upsert" });
+      if (type === "orders") await apiPost("importOrders",    { rows, user: SESSION, mode: "upsert" });
+      if (type === "ship")   await apiPost("importShipments", { rows, user: SESSION, mode: "upsert" });
+      alert("インポート成功");
+      refreshAll(true);
+      populateChubanFromSales();
+    } catch (err) {
+      showApiError("import-" + type, err);
+    }
+  };
+
+  if (isCSV) reader.readAsText(file, "utf-8");
+  else       reader.readAsArrayBuffer(file);
+}
+/* ===================== THEME PICKER + BURGER ===================== */
+/* ===== THEME (sinkron dengan CSS: --bg, --fg, --muted, --card, --border) ===== */
+function _bestTextColor(hex){
+  const h = String(hex||'#000').replace('#','').padEnd(6,'0');
+  const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  const yiq=(r*299+g*587+b*114)/1000;
+  return yiq>=150 ? '#0f172a' : '#ffffff';
+}
+function applyBackground(hex){
+  const fg = _bestTextColor(hex);          // otomatis: bg terang → teks gelap, bg gelap → teks terang
+  const isDark = (fg === '#ffffff');
+
+  // Turunan warna UI inti
+  const root = document.documentElement;
+  root.style.setProperty('--bg', hex);
+  root.style.setProperty('--fg', fg);
+  root.style.setProperty('--muted', isDark ? 'rgba(255,255,255,.75)' : 'rgba(15,23,42,.70)');
+  root.style.setProperty('--card',  isDark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)');
+  root.style.setProperty('--border', isDark
+    ? 'color-mix(in oklab, #fff 18%, transparent)'
+    : 'color-mix(in oklab, #0f172a 18%, transparent)');
+
+  // Warna khusus input (lebih jelas & nyaman dipakai)
+  const inputBg = isDark
+    ? `color-mix(in srgb, ${hex} 82%, #fff 18%)`
+    : `color-mix(in srgb, ${hex} 90%, #000 2%)`;
+  const inputBorder = isDark
+    ? 'color-mix(in oklab, #fff 22%, transparent)'
+    : 'color-mix(in oklab, #0f172a 22%, transparent)';
+  const inputPh = isDark ? 'color-mix(in srgb, #fff 60%, transparent)'
+                         : 'color-mix(in srgb, #0f172a 55%, transparent)';
+  const focusRing = isDark ? 'rgba(59,130,246,.35)' : 'rgba(59,130,246,.25)';
+
+  root.style.setProperty('--input-bg', inputBg);
+  root.style.setProperty('--input-fg', fg);
+  root.style.setProperty('--input-border', inputBorder);
+  root.style.setProperty('--input-ph', inputPh);
+  root.style.setProperty('--input-focus', focusRing);
+
+  // meta theme color (mobile chrome)
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', hex);
+
+  try{ localStorage.setItem('UI_THEME_BG', hex); }catch{}
+}
+
+(function bootTheme(){
+  window.addEventListener('DOMContentLoaded', ()=>{
+    const saved=localStorage.getItem('UI_THEME_BG');
+    if(saved) applyBackground(saved);
+    const miTheme=document.getElementById('miTheme');
+    const dlg=document.getElementById('dlgTheme');
+    if(miTheme && dlg){
+      miTheme.addEventListener('click', ()=>{
+        const grid=dlg.querySelector('#themeGrid');
+        const presets=[
+          ['#f8fafc','Light'], ['#e2e8f0','Gray'], ['#334155','Slate'],
+          ['#0b3b6a','Blue'], ['#14532d','Green'], ['#111827','Black'],
+          ['#0f172a','Dark Navy']
+        ];
+        grid.innerHTML = presets.map(([v,n]) =>
+          `<button class="chip" data-bg="${v}" style="background:${v};color:${_bestTextColor(v)}">${n}</button>`
+        ).join('');
+        grid.onclick = (e)=>{ const b=e.target.closest('[data-bg]'); if(!b) return; applyBackground(b.dataset.bg); };
+        dlg.showModal();
+      });
+    }
+  });
+})();
+
+/* ===== Mobile Burger / Drawer ===================================== */
+/* ===== Mobile Burger / Drawer ===================================== */
+(() => {
+  const nav = document.getElementById('mobileNav');
+  const btn = document.getElementById('btnBurger');
+  if (!nav || !btn) return;
+
+  function openNav() {
+    nav.hidden = false;
+    requestAnimationFrame(() => nav.classList.add('open'));
+    btn.setAttribute('aria-expanded', 'true');
+    document.documentElement.style.overflow = 'hidden';
+  }
+  function closeNav() {
+    nav.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+    document.documentElement.style.overflow = '';
+    setTimeout(() => { nav.hidden = true; }, 220);
+  }
+  function toggle() {
+    (nav.hidden || !nav.classList.contains('open')) ? openNav() : closeNav();
+  }
+
+  btn.addEventListener('click', toggle, { passive: true });
+
+  nav.addEventListener('click', (e) => {
+    const t = e.target;
+
+    if (t && (t.hasAttribute('data-close') || t.closest('[data-close]'))) { closeNav(); return; }
+
+    const go = t && t.closest('[data-go]');
+    if (go) {
+      const id = go.getAttribute('data-go');
+      const realBtn = document.getElementById(id);
+      if (realBtn) realBtn.click();
+      closeNav();
+      return;
+    }
+
+    const act = t && t.closest('[data-act]');
+    if (act) {
+      const m = act.getAttribute('data-act');
+      if (m === 'stationQR')  openStationQR();
+      if (m === 'addUser')    openAddUserModal();
+      if (m === 'changePass') changePasswordUI();
+      if (m === 'theme')      document.getElementById('miTheme')?.click();
+      if (m === 'logout') { SESSION=null; localStorage.removeItem('erp_session'); location.reload(); }
+      closeNav();
+      return;
+    }
+  }, { passive: true });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && nav.classList.contains('open')) closeNav();
+  });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 1024 && !nav.hidden) closeNav();
+  });
+})();
+
+
+/* ===== Service Worker register ===== */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.getRegistration().then(reg=>{
+      if(!reg){ navigator.serviceWorker.register("./sw.js").catch(console.warn); }
+    });
+  });
+}
