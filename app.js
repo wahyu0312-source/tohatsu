@@ -16,12 +16,11 @@ const PREFER_JSONP = false;
 
 /* ===== Processes ===== */
 const PROCESSES = [
-"レザー加工","曲げ加工","外枠組立","シャッター組立","シャッター溶接","コーキング",
-"外枠塗装","組立（組立中）","組立（組立済）","外注",
-"検査保留",        // ⬅️ baru (hold during inspection NG)
-"検査中","検査済","出荷準備","出荷済"
+  "レザー加工","曲げ加工","外枠組立","シャッター組立","シャッター溶接","コーキング",
+  "外枠塗装","組立（組立中）","組立（組立済）","外注",
+  "検査保留",        // ⬅️ baru (hold during inspection NG)
+  "検査中","検査済","出荷準備","出荷済"
 ];
-
 
 /* ===== Station rules ===== */
 const STATION_RULES = {
@@ -44,8 +43,8 @@ const STATION_RULES = {
                         ? { current_process:(o.current_process||"検査工程"), status:"出荷済" }
                         : { current_process:"検査工程", status:"出荷準備" }),
 
-  // ⬇️ label baru agar tombol QR bisa langsung set status/proses
- // saat masuk 検査中, simpan jejak proses produksi terakhir (prev_process)
+  // label baru agar tombol QR bisa langsung set status/proses
+  // saat masuk 検査中, simpan jejak proses produksi terakhir (prev_process)
   "検査中":        (o)=> ({
     current_process: "検査中",
     status: "検査工程",
@@ -74,9 +73,9 @@ const PROC_CLASS = {
   "レザー加工":"prc-laser","曲げ加工":"prc-bend","外枠組立":"prc-frame","シャッター組立":"prc-shassy",
   "シャッター溶接":"prc-shweld","コーキング":"prc-caulk","外枠塗装":"prc-tosou",
   "組立（組立中）":"prc-asm-in","組立（組立済）":"prc-asm-ok","外注":"prc-out",
- "検査工程":"prc-inspect",
-"検査保留":"prc-hold",         // ⬅️ baru
-   "検査中":"prc-inspecting",
+  "検査工程":"prc-inspect",
+  "検査保留":"prc-hold",         // ⬅️ baru
+  "検査中":"prc-inspecting",
   "検査済":"prc-inspected",
   "出荷準備":"prc-shipready",
   "出荷済":"prc-shipped"
@@ -88,7 +87,6 @@ const SWR = {
   set(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} },
 };
 
-/* ===== API helpers (CORS-safe + JSONP fallback) ===== */
 /* ===== API helpers (CORS-safe + JSONP fallback) ===== */
 function toQS(obj){
   return Object.keys(obj||{}).map(k =>
@@ -198,7 +196,6 @@ async function apiGet(params, {swrKey=null, revalidate=true} = {}){
   }
 }
 
-
 function showApiError(action, err){
   console.error("API FAIL:", action, err);
   let bar=document.getElementById("errbar");
@@ -275,18 +272,21 @@ async function initWeather(){
   const elPlace = document.getElementById("wxPlace") || document.querySelector('[data-wx="place"]');
   const elTemp  = document.getElementById("wxTemp")  || document.querySelector('[data-wx="temp"]');
   if((!elPlace && !elTemp) || !("geolocation" in navigator)) return;
-// Manual override (opsional): simpan "WX_CITY_OVERRIDE" & "WX_COORD"
+
+  // Manual override (opsional): simpan "WX_COORD" {lat,lon,name}
   try{
     const override = localStorage.getItem("WX_COORD");
     if(override){
       const { lat, lon, name } = JSON.parse(override);
       if(lat && lon){
         const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=auto`).then(r=>r.json());
-        setUI(name||"手動", wx?.current?.temperature_2m ?? null); setIcon(wx?.current?.weather_code);
+        setUI(name||"手動", wx?.current?.temperature_2m ?? null);
+        setIcon(wx?.current?.weather_code);
         return; // selesai: pakai koordinat manual
       }
     }
   }catch(_){}
+
   function setUI(city, temp){
     if(elPlace) elPlace.textContent = city || "現在地";
     if(elTemp)  elTemp.textContent  = (temp!=null ? Math.round(temp)+"℃" : "--");
@@ -309,7 +309,9 @@ async function initWeather(){
     };
     host.innerHTML = `<i class="fa-solid ${map(wmo)}" aria-hidden="true"></i>`;
   }
-  try{// Permission preflight (jika tersedia) → tampilkan placeholder ramah
+
+  try{
+    // Permission preflight (jika tersedia) → tampilkan placeholder ramah
     if(navigator.permissions && navigator.permissions.query){
       try{
         const st = await navigator.permissions.query({ name: "geolocation" });
@@ -319,6 +321,7 @@ async function initWeather(){
         }
       }catch(_){}
     }
+
     const pos = await new Promise((res,rej)=> navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true, timeout:8000}));
     const { latitude, longitude } = pos.coords;
 
@@ -326,14 +329,14 @@ async function initWeather(){
     let city = "現在地";
 
     // suhu
-   try {
-    const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`)
-      .then(r=>r.json());
-    const temp = wx?.current?.temperature_2m ?? null;
-    const code = wx?.current?.weather_code ?? null;
-    setUI(city, temp);
-    setIcon(code);
-  } catch (_) {
+    try {
+      const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`)
+        .then(r=>r.json());
+      const temp = wx?.current?.temperature_2m ?? null;
+      const code = wx?.current?.weather_code ?? null;
+      setUI(city, temp);
+      setIcon(code);
+    } catch (_) { /* ignore: biar reverse geocode tetap lanjut */ }
 
     // reverse geocoding (opsional; boleh gagal)
     try {
@@ -827,13 +830,6 @@ async function renderShippedList(){
   clearSkeleton(tbody);
   tbody.innerHTML = html;
 }
-// === util: multi 注番 ===
-function parseMultiIds(raw){
-  return String(raw||"")
-    .split(/[\s,;\n\r\t]+/)
-    .map(s=>s.trim())
-    .filter(Boolean);
-}
 
 /* ===== Sales (営業) ===== */
 async function renderSales(){
@@ -841,7 +837,7 @@ async function renderSales(){
   tableSkeleton(tbody, 7, 10);
   const qEl=$("#salesQ"); const q=(qEl&&qEl.value)? qEl.value.trim():"";
   const rows=await apiGet({action:"listSales",q},{swrKey:"sales"+(q?":"+q:"")});
- tbody.innerHTML = rows.map(r=> `
+  tbody.innerHTML = rows.map(r=> `
   <tr>
     <td>${r.so_id||""}</td>
     <td class="s muted">${fmtD(r["受注日"])}</td>
@@ -879,7 +875,6 @@ async function saveSalesUI(){
   const linked0   = $("#so_linked_po")?.value?.trim?.() || "";
   const linkedList= parseMultiIds(linked0);
 
-  // <- ERROR di sini sebelumnya: tidak ada penutup "}" dan koma
   const payload = {
     "受注日": recv,
     "得意先": cust,
@@ -1093,7 +1088,6 @@ async function scheduleUI(){
   }catch(e){ alert(e.message||e); }
 }
 
-
 async function loadShipForEdit(){
   const idEl=$("#s_shipid"); const sid=idEl?idEl.value.trim():"";
   if(!sid) return alert("出荷ID入力");
@@ -1173,7 +1167,7 @@ async function openHistory(po_id){
   try{
     const data=await apiGet({action:"history",po_id});
     const rows=(data||[]).map(x=>`
-      <div class="row s" style="gap:.5rem;border-bottom:1px solid var(--border);padding:.25rem 0">
+      <div class="row s" style="gap=.5rem;border-bottom:1px solid var(--border);padding:.25rem 0">
         <span class="muted">${fmtDT(x.timestamp)}</span>
         <span>${x.updated_by||""}</span>
         <span class="badge ${STATUS_CLASS[x.new_status]||"st-begin"}">${x.prev_status||""} → ${x.new_status||""}</span>
@@ -1207,6 +1201,7 @@ function openStationQR(){
     });
   },0);
 }
+
 /* ===== Inspection OK/NG flow (検査保留 → repair → 検査中) ===== */
 async function updateProcessResult(result){
   try{
@@ -1656,6 +1651,7 @@ function handleImport(e, type){
   if (isCSV) reader.readAsText(file, "utf-8");
   else       reader.readAsArrayBuffer(file);
 }
+
 /* ===================== THEME PICKER + BURGER ===================== */
 /* ===== THEME (sinkron dengan CSS: --bg, --fg, --muted, --card, --border) ===== */
 function _bestTextColor(hex){
@@ -1727,8 +1723,7 @@ function applyBackground(hex){
 })();
 
 /* ===== Mobile Burger / Drawer ===================================== */
-/* ===== Mobile Burger / Drawer ===================================== */
-(() => {
+(()=>{
   const nav = document.getElementById('mobileNav');
   const btn = document.getElementById('btnBurger');
   if (!nav || !btn) return;
@@ -1785,7 +1780,6 @@ function applyBackground(hex){
     if (window.innerWidth >= 1024 && !nav.hidden) closeNav();
   });
 })();
-
 
 /* ===== Service Worker register ===== */
 if ("serviceWorker" in navigator) {
