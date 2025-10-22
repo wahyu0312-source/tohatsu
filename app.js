@@ -275,13 +275,50 @@ async function initWeather(){
   const elPlace = document.getElementById("wxPlace") || document.querySelector('[data-wx="place"]');
   const elTemp  = document.getElementById("wxTemp")  || document.querySelector('[data-wx="temp"]');
   if((!elPlace && !elTemp) || !("geolocation" in navigator)) return;
-
+// Manual override (opsional): simpan "WX_CITY_OVERRIDE" & "WX_COORD"
+  try{
+    const override = localStorage.getItem("WX_COORD");
+    if(override){
+      const { lat, lon, name } = JSON.parse(override);
+      if(lat && lon){
+        const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=auto`).then(r=>r.json());
+        setUI(name||"手動", wx?.current?.temperature_2m ?? null); setIcon(wx?.current?.weather_code);
+        return; // selesai: pakai koordinat manual
+      }
+    }
+  }catch(_){}
   function setUI(city, temp){
     if(elPlace) elPlace.textContent = city || "現在地";
     if(elTemp)  elTemp.textContent  = (temp!=null ? Math.round(temp)+"℃" : "--");
   }
-
-  try{
+  function setIcon(wmo){
+    const host = document.getElementById("wxIcon");
+    if(!host) return;
+    const map = (c)=>{
+      if(c==null) return "fa-question";
+      // WMO quick map (ringkas yang umum)
+      if([0].includes(c)) return "fa-sun";                         // cerah
+      if([1,2].includes(c)) return "fa-cloud-sun";                 // sebagian berawan
+      if([3].includes(c)) return "fa-cloud";                       // berawan
+      if([45,48].includes(c)) return "fa-smog";                    // kabut
+      if([51,53,55,56,57].includes(c)) return "fa-cloud-rain";     // gerimis
+      if([61,63,65,80,81,82].includes(c)) return "fa-cloud-showers-heavy"; // hujan
+      if([71,73,75,77,85,86].includes(c)) return "fa-snowflake";   // salju
+      if([95,96,99].includes(c)) return "fa-cloud-bolt";           // badai
+      return "fa-cloud";
+    };
+    host.innerHTML = `<i class="fa-solid ${map(wmo)}" aria-hidden="true"></i>`;
+  }
+  try{// Permission preflight (jika tersedia) → tampilkan placeholder ramah
+    if(navigator.permissions && navigator.permissions.query){
+      try{
+        const st = await navigator.permissions.query({ name: "geolocation" });
+        if(st.state === "denied"){
+          setUI("位置情報がブロックされています", null);
+          // hint ringan; user bisa tap icon lock di address bar untuk mengizinkan
+        }
+      }catch(_){}
+    }
     const pos = await new Promise((res,rej)=> navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true, timeout:8000}));
     const { latitude, longitude } = pos.coords;
 
@@ -290,12 +327,12 @@ async function initWeather(){
 
     // suhu
     try {
-      const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m&timezone=auto`)
+     const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`)
         .then(r=>r.json());
-      const temp = wx && wx.current ? wx.current.temperature_2m : null;
+      const temp = wx?.current?.temperature_2m ?? null;
+      const code = wx?.current?.weather_code ?? null;
       setUI(city, temp);
-    } catch (e) {
-      setUI(city, null);
+    setIcon(code);
     }
 
     // reverse geocoding (opsional; boleh gagal)
@@ -314,7 +351,8 @@ async function initWeather(){
 
   }catch(e){
     console.warn("weather:", e);
-    setUI("現在地", null);
+    // Fallback: default Tokyo pusat (tanpa lokasi real)
+    setUI("東京（推定）", null);
   }
 }
 
