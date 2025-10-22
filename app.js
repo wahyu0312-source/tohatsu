@@ -16,9 +16,12 @@ const PREFER_JSONP = false;
 
 /* ===== Processes ===== */
 const PROCESSES = [
-  "レザー加工","曲げ加工","外枠組立","シャッター組立","シャッター溶接","コーキング",
-  "外枠塗装","組立（組立中）","組立（組立済）","外注","検査中","検査済","出荷準備","出荷済"
+"レザー加工","曲げ加工","外枠組立","シャッター組立","シャッター溶接","コーキング",
+"外枠塗装","組立（組立中）","組立（組立済）","外注",
+"検査保留",        // ⬅️ baru (hold during inspection NG)
+"検査中","検査済","出荷準備","出荷済"
 ];
+
 
 /* ===== Station rules ===== */
 const STATION_RULES = {
@@ -42,8 +45,15 @@ const STATION_RULES = {
                         : { current_process:"検査工程", status:"出荷準備" }),
 
   // ⬇️ label baru agar tombol QR bisa langsung set status/proses
-  "検査中":        (o)=> ({ current_process: "検査中", status: "検査工程" }),
+ // saat masuk 検査中, simpan jejak proses produksi terakhir (prev_process)
+  "検査中":        (o)=> ({
+    current_process: "検査中",
+    status: "検査工程",
+    prev_process: o.current_process && !String(o.current_process).includes("検査") ? o.current_process : (o.prev_process||"")
+  }),
   "検査済":        (o)=> ({ current_process: "検査済", status: "検査済" }),
+  // hold ketika NG, tetap tercatat jelas di status dan proses
+  "検査保留":      (o)=> ({ current_process: "検査保留", status: "検査保留" }),
   "出荷準備":      (o)=> ({ current_process: (o.current_process||"検査済"), status: "出荷準備" }),
   "出荷済":        (o)=> ({ current_process: (o.current_process||"検査済"), status: "出荷済" })
 };
@@ -64,8 +74,9 @@ const PROC_CLASS = {
   "レザー加工":"prc-laser","曲げ加工":"prc-bend","外枠組立":"prc-frame","シャッター組立":"prc-shassy",
   "シャッター溶接":"prc-shweld","コーキング":"prc-caulk","外枠塗装":"prc-tosou",
   "組立（組立中）":"prc-asm-in","組立（組立済）":"prc-asm-ok","外注":"prc-out",
-  "検査工程":"prc-inspect",
-  "検査中":"prc-inspecting",
+ "検査工程":"prc-inspect",
+"検査保留":"prc-hold",         // ⬅️ baru
+   "検査中":"prc-inspecting",
   "検査済":"prc-inspected",
   "出荷準備":"prc-shipready",
   "出荷済":"prc-shipped"
@@ -1157,6 +1168,52 @@ function openStationQR(){
       new QRCode(div,{text:t,width:120,height:120});
     });
   },0);
+}
+/* ===== Inspection OK/NG flow (検査保留 → repair → 検査中) ===== */
+async function updateProcessResult(result){
+  try{
+    if(!CURRENT_PO) throw new Error("注番が不明です（「更新」を押してから実行）");
+    const o = await apiGet({ action:"ticket", po_id: CURRENT_PO });
+    const isInspectArea = /検査/.test(String(o.current_process||"")) || o.status==="検査工程";
+
+    if(result==="OK"){
+      const updates = isInspectArea
+        ? { current_process:"検査済", status:"検査済", ok_qty: (o.ok_qty||0)+1, note:"検査OK" }
+        : { status:"生産開始", ok_qty:(o.ok_qty||0)+1 };
+      await apiPost("updateOrder", { po_id: CURRENT_PO, updates, user: SESSION });
+      alert("OK 登録：検査済へ");
+    }else{
+      // NG → 検査保留 → balik ke proses produksi untuk repair
+      const back = guessProdBackTarget(o);
+      // step-1: tandai hold (jelas di履歴)
+      await apiPost("updateOrder", {
+        po_id: CURRENT_PO,
+        updates: { current_process:"検査保留", status:"検査保留", ng_qty:(o.ng_qty||0)+1, note:"検査NG→修理" },
+        user: SESSION
+      });
+      // step-2: arahkan ke proses produksi target (repair). Biarkan status tetap "検査保留".
+      if(back){
+        await apiPost("updateOrder", {
+          po_id: CURRENT_PO,
+          updates: { current_process: back, note:"リペア戻し（自動推定）" },
+          user: SESSION
+        });
+      }
+      alert("NG 登録：検査保留 → 修理工程へ");
+    }
+    broadcastDataChange('orders');
+    refreshAll(true);
+  }catch(e){ alert(e.message||e); }
+}
+
+// Kembalikan ke proses produksi “sebelum inspeksi” bila tersedia,
+// kalau tidak ada, pilih kandidat aman (組立（組立済） → 外枠塗装 → 組立（組立中）)
+function guessProdBackTarget(o){
+  const p = o.prev_process;
+  if(p && !/検査/.test(String(p))) return p;
+  const candidates = ["組立（組立済）","外枠塗装","組立（組立中）","外枠組立","シャッター組立","シャッター溶接","コーキング","曲げ加工","レザー加工"];
+  // pilih yang “mendahului” inspeksi terakhir (heuristik aman)
+  return candidates.find(x => x!==o.current_process) || null;
 }
 
 /* ---- FIX: ユーザー追加 dari menu 設定 (bukan alert) ---- */
