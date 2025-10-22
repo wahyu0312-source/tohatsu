@@ -326,14 +326,14 @@ async function initWeather(){
     let city = "現在地";
 
     // suhu
-    try {
-     const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`)
-        .then(r=>r.json());
-      const temp = wx?.current?.temperature_2m ?? null;
-      const code = wx?.current?.weather_code ?? null;
-      setUI(city, temp);
+   try {
+    const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`)
+      .then(r=>r.json());
+    const temp = wx?.current?.temperature_2m ?? null;
+    const code = wx?.current?.weather_code ?? null;
+    setUI(city, temp);
     setIcon(code);
-    }
+  } catch (_) {
 
     // reverse geocoding (opsional; boleh gagal)
     try {
