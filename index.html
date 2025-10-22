@@ -1,604 +1,557 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>品質管理生産技術システム</title>
-<link rel="icon" href="tsh.png">
-<style>
-/* ====== Elegant + Mobile (inline CSS) ====== */
-:root{
-  --bg1:#f6f8fc; --bg2:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e5e7eb;
-  --accent:#2563eb; --accent-ink:#fff; --danger:#dc2626;
-  --radius:22px; --shadow:0 20px 40px rgba(15,23,42,.08); --shadow-sm:0 6px 16px rgba(15,23,42,.06);
-  --blur:12px; --focus:0 0 0 3px rgba(37,99,235,.25);
-}
-@media (prefers-color-scheme: dark){
-  :root{ --bg1:#0b1220; --bg2:#101828; --ink:#e5e7eb; --muted:#94a3b8; --line:#243244;
-    --shadow:0 18px 36px rgba(0,0,0,.5); --shadow-sm:0 8px 20px rgba(0,0,0,.35); }
-}
-*{box-sizing:border-box}
-body{
-  margin:0; color:var(--ink);
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans JP","Yu Gothic",sans-serif;
-  background:
-    radial-gradient(1400px 700px at -10% -10%, rgba(37,99,235,.06), transparent 60%),
-    radial-gradient(900px 500px at 110% -10%, rgba(37,99,235,.05), transparent 60%),
-    var(--bg1);
-  letter-spacing:.2px;
-}
-.wrap{max-width:1200px;margin:0 auto;padding:0 18px}
-.hstack{display:flex;align-items:center;gap:12px}
-.small{font-size:.875rem;color:var(--muted)}
-/* Header */
-header{position:sticky;top:0;z-index:50;background:color-mix(in oklab,var(--bg1) 75%,transparent);
-  backdrop-filter:blur(var(--blur));border-bottom:1px solid color-mix(in oklab,var(--line) 80%,transparent)}
-header .wrap{height:64px;display:flex;align-items:center;justify-content:space-between}
-.nav{display:flex;gap:18px}
-.nav a{color:var(--muted);text-decoration:none;font-weight:600;padding:8px 10px;border-radius:12px;transition:.18s}
-.nav a:hover{color:var(--ink);background:color-mix(in oklab,var(--line) 20%,transparent)}
-.nav a strong{color:var(--ink)}
-/* Buttons / inputs */
-.btn{appearance:none;border:1px solid var(--line);background:var(--bg2);color:var(--ink);
-  padding:10px 14px;border-radius:14px;font-weight:600;box-shadow:var(--shadow-sm);cursor:pointer;
-  transition:transform .04s, box-shadow .18s, background .18s}
-.btn:hover{box-shadow:var(--shadow)} .btn:active{transform:translateY(1px)} .btn:focus-visible{box-shadow:var(--shadow),var(--focus)}
-.btn.primary{background:var(--accent);color:#fff;border-color:transparent}
-.badge{display:inline-flex;align-items:center;gap:6px;background:color-mix(in oklab,var(--accent) 12%,var(--bg2));
-  color:color-mix(in oklab,var(--accent) 85%,black);border:1px solid color-mix(in oklab,var(--accent) 30%,var(--line));
-  padding:6px 10px;border-radius:999px;font-weight:700}
-.badge.small{font-size:.82rem;padding:4px 8px}
-input[type="text"],input[type="date"],input[type="search"],select{
-  background:var(--bg2);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font:inherit;outline:0;
-}
-input:focus,select:focus{box-shadow:var(--focus);border-color:color-mix(in oklab,var(--accent) 60%,var(--line))}
-/* Cards */
-.card{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px}
-.card h2{margin:4px 0 0;font-size:1.25rem}
-#urgent-banner{padding:16px 20px;border-radius:var(--radius);background:var(--danger);color:#fff;box-shadow:var(--shadow)}
-/* Table */
-.table{width:100%;border-collapse:separate;border-spacing:0;margin-top:12px;overflow:hidden;border-radius:16px;border:1px solid var(--line)}
-.table thead th{position:sticky;top:0;background:color-mix(in oklab,var(--bg2) 80%,var(--bg1));
-  text-align:left;font-weight:800;font-size:.95rem;color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--line)}
-.table tbody td{padding:12px 14px;border-bottom:1px solid color-mix(in oklab,var(--line) 70%,transparent);vertical-align:top;
-  max-width:280px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
-.table tbody tr:nth-child(odd){background:color-mix(in oklab,var(--bg1) 35%,transparent)}
-.table tbody tr:hover{background:color-mix(in oklab,var(--accent) 6%,transparent)}
-.table a{color:var(--accent);text-decoration:none;font-weight:700}
-.table a:hover{text-decoration:underline}
-.pill{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;font-weight:700;background:var(--bg1);border:1px solid var(--line)}
-.tag-done{background:#16a34a;color:#fff}.tag-inspect{background:#7c3aed;color:#fff}.tag-assem{background:#0ea5e9;color:#fff}
-.tag-assem-done{background:#22c55e;color:#fff}.tag-not{background:#e2e8f0;color:#0f172a}
-#procPills{display:flex;flex-wrap:wrap;gap:8px} #procHint{margin-top:6px}
-/* Modal */
-.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.45);z-index:100;padding:18px}
-.modal .box{background:var(--bg2);border:1px solid var(--line);border-radius:18px;width:min(720px,96vw);padding:18px;box-shadow:var(--shadow);
-  animation:modalIn .18s ease-out}
-@keyframes modalIn{from{transform:translateY(6px);opacity:0}to{transform:translateY(0);opacity:1}}
-/* ===== Drawer Sidebar (mobile) ===== */
-.drawer{position:fixed;inset:0;z-index:70;display:none}
-.drawer.open{display:block}
-.drawer .backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
-.drawer .panel{position:absolute;top:0;left:0;height:100%;width:min(84vw,320px);background:var(--bg2);
-  border-right:1px solid var(--line);box-shadow:var(--shadow);padding:18px;overflow:auto}
-.drawer .menu a{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;
-  color:var(--ink);text-decoration:none;border:1px solid transparent}
-.drawer .menu a:hover{background:color-mix(in oklab,var(--line) 22%,transparent);border-color:var(--line)}
-/* ===== Bottom Nav (mobile) ===== */
-.bottom-nav{position:fixed;left:0;right:0;bottom:0;background:var(--bg2);border-top:1px solid var(--line);
-  display:none;z-index:60}
-.bottom-nav .bar{display:flex;justify-content:space-around;padding:6px 4px}
-.bottom-nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 6px;text-decoration:none;color:var(--muted);font-size:.78rem}
-.bottom-nav a.active{color:var(--accent);font-weight:700}
-.bottom-nav svg{width:22px;height:22px}
-/* Responsive */
-.menu-btn{display:none}
-@media (max-width: 960px){
-  .nav{display:none}
-  .menu-btn{display:inline-flex}
-  .wrap{padding:0 14px}
-  .card{padding:16px}
-  .bottom-nav{display:block}
-  main{padding-bottom:72px} /* space for bottom nav */
-}
-.footer{text-align:center;color:var(--muted);padding:30px 0 80px;font-size:.9rem}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <title>東京精密発條株式会社システム</title>
+  <link rel="icon" href="assets/tsh.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer">
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script defer src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script defer src="app.js?v=2025-10-21-03-2"></script>
+
+
+  <style>
+    .wx-pill{ display:inline-flex;align-items:center;gap:.6rem; padding:.5rem .8rem;border-radius:999px; border:1px solid rgba(0,0,0,.08); background:linear-gradient(180deg,#ffffff 0%, #f8fafc 100%); color:#0f172a; box-shadow:0 6px 18px rgba(2,6,23,.08), inset 0 1px 0 #fff; min-height:40px; max-width:60vw; }
+    .wx-city{font-size:.9rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .wx-temp{font-weight:900;letter-spacing:.02em}
+    .wx-dot{width:6px;height:6px;border-radius:50%;background:#93c5fd;opacity:.9}
+    @media (max-width:760px){ .wx-pill{order:-1} }
+
+    /* FIX: label kecil untuk input tanggal */
+    .labeled{display:flex;flex-direction:column;gap:.25rem}
+    .labeled>label{font-size:.75rem;color:#64748b;padding-left:.25rem}
+
+    /* Charts grid */
+    #chartsGrid{display:grid;grid-template-columns:repeat(3,minmax(260px,1fr));gap:1rem}
+    .chart-card{height:300px;padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff}
+    @media (max-width:1100px){#chartsGrid{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:720px){#chartsGrid{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
-  <!-- Drawer Sidebar -->
-  <div id="drawer" class="drawer" aria-hidden="true">
-    <div class="backdrop" id="drawerClose"></div>
-    <aside class="panel">
-      <div class="hstack" style="justify-content:space-between">
-        <div class="hstack"><img src="tsh.png" alt="TSH" style="height:28px"><strong>品質管理生産技術</strong></div>
-        <button class="btn" id="drawerCloseBtn">✕</button>
-      </div>
-      <div class="menu" style="margin-top:12px">
-        <a href="./index.html">🏠 ホーム</a>
-        <a href="./position.html">📍 ポジション</a>
-        <a href="./item.html">🕒 タイムライン</a>
-        <a href="./inventory.html">📦 在庫</a>
-        <a href="./receive.html">📥 受入</a>
-        <a href="./issue.html">📤 払出</a>
-      </div>
-      <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
-      <div class="hstack" style="gap:8px;flex-wrap:wrap">
-        <button id="btnRefresh2" class="btn">Refresh</button>
-        <button id="btnLive2" class="btn">Live</button>
-        <button id="btnScan2" class="btn">Scan</button>
-        <button id="btnManual2" class="btn">Input</button>
-      </div>
-    </aside>
+ <!-- 1) TOP BAR -->
+<header class="topbar">
+  <div class="nav-left">
+    <button id="btnBurger" class="burger" aria-label="メニュー" aria-expanded="false" aria-controls="mobileNav">
+      <span></span><span></span><span></span>
+    </button>
+    <img src="assets/tsh.png" class="logo" alt="">
+    <span class="brand">東京精密発條株式会社システム</span>
   </div>
 
-  <!-- Header -->
-  <header>
-    <div class="wrap">
-      <div class="hstack">
-        <button id="menuBtn" class="btn menu-btn" aria-label="Menu">☰</button>
-        <img src="tsh.png" alt="TSH" style="height:36px">
-        <strong>品質管理生産技術</strong>
-      </div>
-      <nav class="nav">
-        <a href="./index.html"><strong>ホーム</strong></a>
-        <a href="./position.html">ポジション</a>
-        <a href="./item.html">タイムライン</a>
-        <a href="./inventory.html">在庫</a>
-        <a href="./receive.html">受入</a>
-        <a href="./issue.html">払出</a>
-      </nav>
-      <div class="hstack">
-        <button id="btnRefresh" class="btn">Refresh</button>
-        <button id="btnLive" class="btn">Live</button>
-        <span id="intervalInfo" class="badge">60s</span>
-        <button id="btnScan" class="btn">Scan</button>
-        <button id="btnManual" class="btn">Input</button>
-      </div>
+  <div class="nav-right">
+    <!-- cuaca -->
+    <div id="weather" class="wx-pill" aria-live="polite" title="現在の天気">
+      <span id="wxPlace" class="wx-city">取得中…</span>
+      <span class="wx-dot" aria-hidden="true"></span>
+      <span id="wxTemp" class="wx-temp">--℃</span>
     </div>
-  </header>
 
-  <!-- Main -->
-  <main class="wrap" style="margin:28px auto">
-    <div id="urgent-banner" class="card">現在、至急案件はありません。</div>
+    <!-- quick nav (sudah ada di file kamu) -->
+    <button id="btnToDash" class="btn ghost hidden"><i class="fa-solid fa-gauge"></i> ダッシュボード</button>
+    <button id="btnToSales" class="btn ghost hidden"><i class="fa-regular fa-handshake"></i> 受注（営業）</button>
+    <button id="btnToPlan" class="btn ghost hidden"><i class="fa-solid fa-list-check"></i> 生産計画</button>
+    <button id="btnToShip" class="btn ghost hidden"><i class="fa-solid fa-truck"></i> 出荷予定</button>
+    <button id="btnToInvPage" class="btn ghost hidden"><i class="fa-solid fa-boxes-stacked"></i> 在庫</button>
+    <button id="btnToFinPage" class="btn ghost hidden"><i class="fa-regular fa-square-check"></i> 完成品一覧</button>
+    <button id="btnToShipped" class="btn ghost hidden"><i class="fa-solid fa-box-archive"></i> 出荷済</button>
+    <button id="btnToInvoice" class="btn ghost hidden"><i class="fa-regular fa-file-lines"></i> 請求書</button>
+    <button id="btnToCharts" class="btn ghost hidden"><i class="fa-solid fa-chart-simple"></i> 統計</button>
 
-    <section class="card" id="processBoard" style="margin-top:16px">
-      <div class="hstack" style="justify-content:space-between">
-        <h2>工程進捗（最新スキャン基準）</h2>
-        <span class="badge small">最新件数</span>
+    <!-- dropdown 設定 -->
+    <details class="dropdown-inline hidden" id="ddSetting">
+      <summary class="btn ghost">
+        <i class="fa-solid fa-gear"></i> 設定 <i class="fa-solid fa-caret-down caret" style="margin-left:.25rem"></i>
+      </summary>
+      <div class="menu right">
+        <button id="miStationQR" class="menu-item"><i class="fa-solid fa-qrcode"></i> 工程QR</button>
+        <button id="miAddUser" class="menu-item"><i class="fa-solid fa-user-plus"></i> ユーザー追加</button>
+        <button id="miChangePass" class="menu-item"><i class="fa-solid fa-key"></i> パス変更</button>
+        <hr style="border:none;border-top:1px solid var(--border);margin:.35rem 0">
+        <button id="miTheme" class="menu-item"><i class="fa-solid fa-palette"></i> 背景色</button>
+        <button id="btnLogout" class="menu-item"><i class="fa-solid fa-right-from-bracket"></i> ログアウト</button>
       </div>
-      <div class="hstack" id="procPills" style="margin-top:8px;flex-wrap:wrap"></div>
-      <div class="small" id="procHint"></div>
-    </section>
+    </details>
+    <span id="userInfo" class="muted"></span>
+  </div>
+</header>
 
-    <section id="todaySection" class="card" style="display:none;margin-top:16px">
-      <div class="hstack" style="justify-content:space-between">
-        <h2>本日出荷</h2>
-        <span class="badge"><span>件数</span><strong id="todayCount" style="margin-left:6px">0</strong></span>
-      </div>
-      <table id="todayTable" class="table">
-        <thead><tr id="todayHead"></tr></thead>
-        <tbody id="todayBody"></tbody>
-      </table>
-    </section>
+<!-- 2) MOBILE DRAWER (pakai data- atribut agar tidak bentrok ID) -->
+<nav id="mobileNav" class="nav-drawer" hidden>
+  <div class="scrim" data-close></div>
+  <div class="panel">
+    <div class="panel-head">
+      <strong>メニュー</strong>
+      <button class="close" data-close aria-label="閉じる">×</button>
+    </div>
+    <ul class="mnav">
+      <li><button class="linklike" data-go="btnToDash">ダッシュボード</button></li>
+      <li><button class="linklike" data-go="btnToSales">受注（営業）</button></li>
+      <li><button class="linklike" data-go="btnToPlan">生産計画</button></li>
+      <li><button class="linklike" data-go="btnToShip">出荷予定</button></li>
+      <li class="sep"></li>
+      <li class="group">
+        <details open>
+          <summary>設定</summary>
+          <button class="linklike" data-act="stationQR">工程QR</button>
+          <button class="linklike" data-act="addUser">ユーザー追加</button>
+          <button class="linklike" data-act="changePass">パスワード変更</button>
+          <button class="linklike" data-act="theme">背景色</button>
+          <button class="linklike" data-act="logout">ログアウト</button>
+        </details>
+      </li>
+    </ul>
+  </div>
+</nav>
 
-    <section class="card" style="margin-top:16px">
-      <div class="hstack" style="justify-content:space-between; flex-wrap:wrap">
-        <h2>全件一覧</h2>
-        <div class="hstack" style="flex-wrap:wrap">
-          <label class="small">出荷日：</label>
-          <input type="date" id="filterDate">
-          <button class="btn" id="btnToday">本日出荷のみ</button>
-          <button class="btn" id="btnClear">Clear</button>
-          <button class="btn" id="btnExcel">Export Excel</button>
-        </div>
+
+  <a class="corner-brand" href="#" aria-label="Design credit">Design by Wahyu</a>
+
+  <!-- AUTH -->
+  <main id="authView" class="container">
+    <section class="card card-tight">
+      <h2><i class="fa-solid fa-right-to-bracket"></i> ログイン</h2>
+      <div class="grid">
+        <input id="inUser" placeholder="ユーザー名">
+        <input id="inPass" type="password" placeholder="パスワード">
       </div>
-      <table id="shipTable" class="table">
-        <thead><tr id="shipHead"></tr></thead>
-        <tbody id="shipBody"></tbody>
-      </table>
-      <div class="small" id="shipHint"></div>
+
+      <!-- FIX: Hapus 'ユーザー追加' dari halaman login -->
+      <!-- (dipindah ke dialog khusus admin di bagian bawah) -->
+
+      <button id="btnLogin" class="btn primary full" style="margin-top:.8rem">ログイン</button>
     </section>
   </main>
 
-  <!-- Bottom Navigation (mobile) -->
-  <nav class="bottom-nav" aria-label="Bottom navigation">
-    <div class="bar">
-      <a href="./index.html" class="active">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/></svg>
-        ホーム
-      </a>
-      <a href="./item.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4h18"/><path d="M3 12h18"/><path d="M3 20h18"/></svg>
-        タイムライン
-      </a>
-      <a href="javascript:void(0)" id="bnScan">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        スキャン
-      </a>
-      <a href="./inventory.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-2-2h-5V4H10v2H5a2 2 0 0 0-2 2v8"/></svg>
-        在庫
-      </a>
-      <a href="javascript:void(0)" id="bnMore">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-        その他
-      </a>
+  <!-- DASHBOARD -->
+  <main id="pageDash" class="container hidden">
+    <section class="card" id="ordersSection">
+      <header class="row-between">
+        <h3><i class="fa-solid fa-clipboard-list"></i> 進捗状況</h3>
+        <div class="row gap">
+          <input id="searchQ" placeholder="検索..." class="input">
+          <button class="btn ghost" id="btnExportOrders"><i class="fa-solid fa-file-csv"></i> 注文CSV</button>
+          <button class="btn ghost" id="btnExportShip"><i class="fa-solid fa-file-csv"></i> 本日出荷CSV</button>
+        </div>
+      </header>
+      <div class="table-wrap" style="max-height:55vh">
+        <table class="table s">
+          <thead>
+            <tr>
+              <th>注番 / 得意先</th><th>品名</th><th>品番</th><th>図番</th><th>機種</th><!-- NEW -->
+              <th>状態</th><th>工程</th><th>更新日時</th><th>更新者</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="tbOrders"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-solid fa-gauge"></i> ダッシュボード</h3>
+        <div class="row gap">
+          <button class="btn ghost" id="btnRefresh"><i class="fa-solid fa-rotate"></i> 更新</button>
+          <button class="btn ghost" onclick="window.print()"><i class="fa-solid fa-print"></i> 印刷</button>
+        </div>
+      </header>
+
+      <div class="grid-3">
+        <div class="tile">
+          <div class="muted s">完成品在庫</div>
+          <div id="statFinished" class="stat-num">-</div>
+          <div class="muted s"><span id="statReady">-</span> 準備 / <span id="statShipped">-</span> 出荷済</div>
+        </div>
+        <div class="tile">
+          <div class="muted s">本日の出荷予定</div>
+          <div id="listToday" class="list s"></div>
+        </div>
+        <div class="tile">
+          <div class="muted s">工程内滞留（現在位置）</div>
+          <div id="gridProc" class="grid grid-chips"></div>
+          <div id="process-okng"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- SALES -->
+  <main id="pageSales" class="container hidden">
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-regular fa-handshake"></i> 受注（営業）入力</h3>
+        <div class="row gap">
+          <input type="file" id="fileSales" accept=".csv, .xlsx" class="hidden">
+          <button class="btn ghost" id="btnSalesImport"><i class="fa-solid fa-file-arrow-up"></i> インポート</button>
+          <button class="btn ghost" id="btnSalesExport"><i class="fa-solid fa-file-csv"></i> エクスポート</button>
+          <button class="btn primary" id="btnSalesSave"><i class="fa-solid fa-floppy-disk"></i> 保存（新規/編集保存）</button>
+          <button class="btn" id="btnSalesDelete"><i class="fa-solid fa-trash-can"></i> 削除</button>
+          <button class="btn ghost" id="btnPromote"><i class="fa-solid fa-arrow-right-arrow-left"></i> 計画に変換</button>
+        </div>
+      </header>
+
+      <div class="grid">
+        <!-- 左 -->
+        <input id="so_id"  placeholder="受注番号（編集用）">
+        <input id="so_cust" placeholder="得意先" list="dl_tokui">
+        <input id="so_sei"  placeholder="製番号">
+        <div class="labeled"><label for="so_date">受注日</label><input id="so_date" type="date"></div>
+        <input id="so_drw"  placeholder="図番" list="dl_zuban">
+        <input id="so_status" placeholder="状態">
+        <!-- 右 -->
+        <div class="labeled"><label for="so_req">希望納期</label><input id="so_req" type="date"></div>
+        <input id="so_part" placeholder="品番" list="dl_hinban">
+        <input id="so_note" placeholder="備考">
+        <input id="so_item" placeholder="品名" list="dl_hinmei">
+        <input id="so_kishu" placeholder="機種" list="dl_kishu">
+        <input id="so_qty" type="number" inputmode="numeric" pattern="\d*" placeholder="数量"><!-- FIX: keyboard numerik -->
+        <input id="so_linked_po" placeholder="関連注番（PO）">
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-regular fa-rectangle-list"></i> 受注一覧</h3>
+        <input id="salesQ" placeholder="検索..." class="input">
+      </header>
+      <div class="table-wrap">
+        <table class="table s">
+          <thead>
+            <tr>
+              <th>受注番号</th><th>受注日</th><th>得意先</th><th>品名</th><th>品番/図番</th><th>機種</th><th>数量</th><th>希望納期</th><th>状態</th><th>関連注番</th><th>更新</th>
+            </tr>
+          </thead>
+          <tbody id="tbSales"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- PLAN -->
+  <main id="pagePlan" class="container hidden">
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-solid fa-list-check"></i> 生産計画（生産現品票）</h3>
+        <div class="row gap">
+          <input type="file" id="filePlan" accept=".csv, .xlsx" class="hidden">
+          <button class="btn ghost" id="btnPlanImport"><i class="fa-solid fa-file-arrow-up"></i> インポート</button>
+          <button class="btn ghost" id="btnPlanExport"><i class="fa-solid fa-file-csv"></i> エクスポート</button>
+          <button class="btn ghost" id="btnPlanEdit"><i class="fa-solid fa-pen-to-square"></i> 編集</button>
+          <button class="btn primary" id="btnCreateOrder"><i class="fa-solid fa-floppy-disk"></i> 保存（新規/編集保存）</button>
+          <button class="btn" id="btnPlanDelete"><i class="fa-solid fa-trash-can"></i> 削除</button>
+        </div>
+      </header>
+
+      <div class="grid">
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <select id="poSource" class="input" style="width:180px">
+            <option value="so">受注から選択</option>
+            <option value="manual">手入力</option>
+            <option value="blank">空欄</option>
+          </select>
+          <input id="c_po" placeholder="注番（編集用）" list="dl_po_from_so">
+          <datalist id="dl_po_from_so"></datalist>
+        </div>
+
+        <input id="c_tokui" placeholder="得意先" list="dl_tokui">
+        <input id="c_sei" placeholder="製番号">
+        <input id="c_hinmei" placeholder="品名" list="dl_hinmei">
+        <input id="c_kishu" placeholder="機種" list="dl_kishu">
+        <input id="c_hinban" placeholder="品番" list="dl_hinban">
+        <input id="c_zuban" placeholder="図番" list="dl_zuban">
+        <input id="c_qty" type="number" min="0" placeholder="数量">
+        <div class="labeled">
+          <label for="c_due">納期</label>
+          <input id="c_due" type="date">
+        </div>
+        <div class="labeled">
+          <label for="c_nyu">投入日</label>
+          <input id="c_nyu" type="date">
+        </div>
+      </div>
+      <datalist id="dl_tokui"></datalist>
+      <datalist id="dl_hinmei"></datalist>
+      <datalist id="dl_hinban"></datalist>
+      <datalist id="dl_zuban"></datalist>
+      <datalist id="dl_kishu"></datalist>
+    </section>
+
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-regular fa-rectangle-list"></i> 生産計画一覧</h3>
+        <input id="planQ" placeholder="検索..." class="input">
+      </header>
+      <div class="table-wrap">
+        <table class="table s">
+          <thead>
+            <tr>
+              <th>注番 / 得意先</th><th>品名</th><th>品番</th><th>図番</th><th>機種</th><!-- NEW -->
+              <th>投入日</th><th>状態</th><th>工程</th><th>更新</th>
+            </tr>
+          </thead>
+          <tbody id="tbPlan"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- SHIP -->
+  <main id="pageShip" class="container hidden">
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-solid fa-truck"></i> 出荷予定 / 出荷確認</h3>
+        <div class="row gap">
+          <input type="file" id="fileShip" accept=".csv, .xlsx" class="hidden">
+          <button class="btn ghost" id="btnShipImport"><i class="fa-solid fa-file-arrow-up"></i> インポート</button>
+          <button class="btn ghost" onclick="window.print()"><i class="fa-solid fa-print"></i> 印刷</button>
+          <button class="btn ghost" id="btnShipExport"><i class="fa-solid fa-file-csv"></i> エクスポート</button>
+          <button class="btn ghost" id="btnShipEdit"><i class="fa-solid fa-pen-to-square"></i> 編集</button>
+          <button class="btn primary" id="btnSchedule"><i class="fa-solid fa-floppy-disk"></i> 保存（新規/編集保存）</button>
+          <button class="btn" id="btnShipDelete"><i class="fa-solid fa-trash-can"></i> 削除</button>
+        </div>
+      </header>
+
+      <div class="grid">
+        <!-- 左 -->
+        <input id="s_po" placeholder="注番">
+        <div class="labeled"><label for="s_date">出荷日</label><input id="s_date" type="date"></div>
+        <input id="s_cust" placeholder="得意先" list="dl_tokui">
+        <input id="s_item" placeholder="品名" list="dl_hinmei">
+        <input id="s_kishu" placeholder="機種" list="dl_kishu">
+        <input id="s_dest" placeholder="送り先" list="dl_okurisaki">
+        <input id="s_shipid" placeholder="出荷ID（編集/削除用）">
+        <!-- 右 -->
+        <div class="labeled"><label for="s_delivery">納入日</label><input id="s_delivery" type="date"></div>
+        <input id="s_qty" type="number" min="0" inputmode="numeric" pattern="\d*" placeholder="数量"><!-- FIX -->
+        <input id="s_part" placeholder="品番" list="dl_hinban">
+        <input id="s_drw" placeholder="図番" list="dl_zuban">
+        <input id="s_carrier" placeholder="運送会社" list="dl_unso">
+        <div></div>
+      </div>
+
+      <datalist id="dl_okurisaki"></datalist>
+      <datalist id="dl_unso"></datalist>
+
+      <div class="row gap">
+        <button id="btnShipByPO" class="btn ghost grow"><i class="fa-regular fa-file-lines"></i> 出荷確認書（注番）</button>
+        <button id="btnShipByID" class="btn ghost grow"><i class="fa-regular fa-file-lines"></i> 出荷確認書（出荷ID）</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-regular fa-rectangle-list"></i> 出荷予定一覧</h3>
+        <div class="row gap">
+          <input id="shipCust" placeholder="得意先" list="dl_tokui" class="input" style="width:200px">
+          <input id="shipFrom" type="date" class="input" style="width:150px">
+          <input id="shipTo"   type="date" class="input" style="width:150px">
+          <button class="btn ghost" id="btnShipReset"><i class="fa-solid fa-rotate"></i> クリア</button>
+        </div>
+      </header>
+      <div class="table-wrap">
+        <table class="table s">
+          <thead>
+            <tr>
+              <th>出荷日</th><th>注番</th><th>得意先</th><th>品名</th>
+              <th>品番</th><th>図番</th><th>機種</th><!-- NEW -->
+              <th>数量</th><th>納入日</th><th>送り先</th><th>運送会社</th><th>出荷ID</th><th>更新</th>
+            </tr>
+          </thead>
+          <tbody id="tbShipList"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- INVENTORY -->
+  <main id="pageInventory" class="container hidden">
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-solid fa-boxes-stacked"></i> 在庫（未出荷）</h3>
+        <input id="invQ" placeholder="検索..." class="input">
+      </header>
+      <div class="table-wrap">
+        <table class="table s">
+          <thead>
+            <tr>
+              <th>注番 / 得意先</th><th>品名</th><th>品番</th><th>図番</th><th>機種</th><!-- NEW -->
+              <th>状態</th><th>工程</th><th>更新</th><th>更新者</th>
+            </tr>
+          </thead>
+          <tbody id="tbInv"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- FINISHED -->
+  <main id="pageFinished" class="container hidden">
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-regular fa-square-check"></i> 完成品一覧（検査済/出荷準備）</h3>
+        <input id="finQ" placeholder="検索..." class="input">
+      </header>
+      <div class="table-wrap">
+        <table class="table s">
+          <thead>
+            <tr>
+              <th>注番 / 得意先</th><th>品名</th><th>品番</th><th>図番</th><th>機種</th><!-- NEW -->
+              <th>状態</th><th>工程</th><th>更新</th><th>更新者</th>
+            </tr>
+          </thead>
+          <tbody id="tbFin"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- SHIPPED -->
+  <section id="pageShipped" class="container hidden">
+    <div class="card">
+      <div class="row-between">
+        <h3><i class="fa-solid fa-box-archive"></i> 出荷済一覧</h3>
+        <input id="shippedQ" class="input" placeholder="検索（注番/得意先/品名...）">
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>注番</th><th>得意先</th><th>品名</th><th>品番</th><th>図番</th><th>機種</th><!-- NEW -->
+              <th>数量</th><th>状態</th><th>更新</th>
+            </tr>
+          </thead>
+          <tbody id="tbShipped"></tbody>
+        </table>
+      </div>
     </div>
-  </nav>
+  </section>
 
-  <div class="footer">Design by Wahyu</div>
+  <!-- INVOICE -->
+  <main id="pageInvoice" class="container hidden">
+    <section class="card">
+      <header class="row-between"><h3><i class="fa-regular fa-file-lines"></i> 請求書作成</h3></header>
+      <div class="grid">
+        <input id="inv_customer" placeholder="得意先" list="dl_tokui">
+        <input id="inv_pos" placeholder="注番（複数可：空白/カンマ/改行）">
+        <input id="inv_from" type="date" placeholder="期間自">
+        <input id="inv_to" type="date" placeholder="期間至">
+        <input id="inv_date" type="date" placeholder="請求日">
+        <input id="inv_currency" placeholder="通貨" value="JPY">
+        <input id="inv_memo" placeholder="メモ">
+      </div>
+      <div class="row gap" style="margin-top:.6rem">
+        <button id="btnInvPreview" class="btn ghost"><i class="fa-solid fa-calculator"></i> 集計（出荷済）</button>
+        <button id="btnInvCreate" class="btn primary"><i class="fa-solid fa-stamp"></i> 請求書発行</button>
+        <button id="btnInvPrint" class="btn ghost"><i class="fa-solid fa-print"></i> 印刷</button>
+        <button id="btnInvCSV" class="btn ghost"><i class="fa-solid fa-file-csv"></i> CSV</button>
+      </div>
+    </section>
+    <section class="card">
+      <h3>請求明細（編集可：単価）</h3>
+      <div class="table-wrap">
+        <table class="table s" id="tblInv">
+          <thead>
+            <tr>
+              <th>#</th><th>品名</th><th>品番</th><th>図番</th><th>機種</th><!-- NEW -->
+              <th>数量</th><th>単価</th><th>金額</th><th>注番</th><th>出荷ID</th>
+            </tr>
+          </thead>
+          <tbody id="invLines"></tbody>
+          <tfoot>
+            <tr><td colspan="5"></td><td class="muted">小計</td><td id="invSub">0</td><td colspan="2"></td></tr>
+            <tr><td colspan="5"></td><td class="muted">税額(10%)</td><td id="invTax">0</td><td colspan="2"></td></tr>
+            <tr><td colspan="5"></td><td class="muted"><b>合計</b></td><td id="invTotal"><b>0</b></td><td colspan="2"></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+  </main>
 
-  <!-- ===== Libraries ===== -->
-  <script src="./assets/config.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://unpkg.com/@zxing/browser@latest"></script>
+  <!-- CHARTS -->
+  <main id="pageCharts" class="container hidden">
+    <section class="card">
+      <header class="row-between">
+        <h3><i class="fa-solid fa-chart-simple"></i> 統計</h3>
+        <div class="row gap">
+          <select id="chartYear" class="input" style="width:140px"></select>
+          <button id="btnChartsRefresh" class="btn ghost"><i class="fa-solid fa-rotate"></i> 更新</button>
+        </div>
+      </header>
+      <div id="chartsGrid">
+        <div class="chart-card"><canvas id="chMonthly"></canvas></div>
+        <div class="chart-card"><canvas id="chCustomer"></canvas></div>
+        <div class="chart-card"><canvas id="chStock"></canvas></div>
+        <div class="chart-card"><canvas id="chWipProc"></canvas></div>
+        <div class="chart-card"><canvas id="chSales"></canvas></div>
+        <div class="chart-card"><canvas id="chPlan"></canvas></div>
+      </div>
+    </section>
+  </main>
 
-  <!-- ===== App Script ===== -->
-  <script>
-  // ===== Config shortcuts =====
-  const SHEET_ID = APP.SHEET_ID, TAB_NAME = APP.TAB_MASTER;
+  <!-- DIALOGS -->
+  <dialog id="dlgStationQR" class="paper">
+    <div class="body"><h3>工程QR（現場掲示用）</h3><p class="muted s">フォーマット: <code>ST:工程名</code></p><div id="qrWrap" class="grid"></div></div>
+    <footer class="row-end"><button class="btn" onclick="document.getElementById('dlgStationQR').close()">閉じる</button></footer>
+  </dialog>
 
-  // CSV master (最新情報)
-  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmw6oMhjQRmXjSL9R9PhBZGa0aJ5WrxHKYzcOpACGOo1GEV0NimYgpTAsnUiNg7nT4tEQ-euqDSSVt/pub?gid=0&single=true&output=csv";
-
-  // CSV scan_log (PERBAIKAN: pakai gid=2085218630)
-  const LOG_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmw6oMhjQRmXjSL9R9PhBZGa0aJ5WrxHKYzcOpACGOo1GEV0NimYgpTAsnUiNg7nT4tEQ-euqDSSVt/pub?gid=2085218630&single=true&output=csv";
-
-  const LOG_API  = APP.LOG_API, LOG_TOKEN = APP.LOG_TOKEN, CURRENT_USER = APP.CURRENT_USER;
-  const S = s => String(s ?? '').trim();
-
-  // ===== CSV parser =====
-  function parseCSV(t){
-    const rows=[], re=/\s*("(?:[^"]|"")*"|[^,]*)\s*(,|\n|$)/g; let m, row=[];
-    t=t.replace(/\r\n?/g,"\n");
-    for(let i=0;i<t.length;){ re.lastIndex=i; m=re.exec(t); if(!m) break;
-      let cell=m[1]; if(cell.startsWith('"')) cell=cell.slice(1,-1).replace(/""/g,'"');
-      row.push(cell); i=re.lastIndex; if(m[2]==="\n"||m[2]===""){ rows.push(row); row=[]; } }
-    return rows.filter(r=>r.length && r.some(c=>S(c)!==""));
-  }
-
-  // ===== Header indexer =====
-  function indexByName(header){
-    const map={}; header.forEach((h,i)=>map[S(h)]=i);
-    const find=names=>{for(const n of names){if(n in map) return map[n];} return null;};
-    const findFuzzy=rx=>{for(let i=0;i<header.length;i++){ if(rx.test(S(header[i]))) return i; } return null;};
-    return {
-      date:find(["出荷日","日付","Date"]),
-      cust:find(["顧客名","客先","Customer"]),
-      draw:find(["図番","Drawing","図面"]),
-      item:find(["商品名","品名","Item"]),
-      machine:find(["機種","機種名","Machine"]),
-      qty:find(["数量","Qty"]),
-      to:find(["送り先","納品先","送付先"]),
-      note:find(["注番","注文番号","備考","注文","Order","注釈"]),
-      status_done:find(["製品状況","製品状態","納品状況"]) ?? findFuzzy(/(製品|納品).*(状況|状態)/),
-      status_flag:find(["Status","ステータス","状態","至急"]) ?? findFuzzy(/status|至急/i),
-    };
-  }
-  const valAt = (row, idx) => (idx==null ? "" : (row[idx] ?? ""));
-
-  // ===== Date helpers =====
-  function parseJPDate(str){
-    const s=S(str); const mJP=s.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})/);
-    if(mJP) return new Date(mJP[1], mJP[2]-1, mJP[3]);
-    const parts=s.replaceAll('-','/').split('/'); if(parts.length===3) return new Date(parts[0], parts[1]-1, parts[2]);
-    const d=new Date(s); return isNaN(d)?null:d;
-  }
-  function sameYMD(a,b){ return a&&b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
-  function toInputDate(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
-  function isUrgent(v){ const t=S(v).toLowerCase(); return t==="至急"||t==="urgent"||t==="緊急"||t==="1"||t==="true"; }
-
-  // ===== Status badge =====
-  function getStatusFromValue(val){
-    const raw=S(val), t=raw.replace(/\s/g,'').toLowerCase();
-    if(!t || /(未|clear)/.test(t)) return {label:'未組立', cls:'tag-not'};
-    if(/(検査済み|済|完了|ok|done)/.test(t)) return {label:'済', cls:'tag-done'};
-    if(/(組立完了)/.test(raw)) return {label:'組立完了', cls:'tag-assem-done'};
-    if(/(検査中|検中)/.test(raw)) return {label:'検査中', cls:'tag-inspect'};
-    if(/(組立中|組中)/.test(raw)) return {label:'組立中', cls:'tag-assem'};
-    if(/検/.test(raw)) return {label:'検査中', cls:'tag-inspect'};
-    if(/組/.test(raw)) return {label:'組立中', cls:'tag-assem'};
-    return null;
-  }
-  function makeComparator(idx){
-    const rank=s=>({'検査中':1,'組立中':2,'未組立':3,'組立完了':4,'済':5}[s]??99);
-    return (a,b)=>{
-      const au=idx.status_flag!=null && isUrgent(valAt(a, idx.status_flag));
-      const bu=idx.status_flag!=null && isUrgent(valAt(b, idx.status_flag));
-      if(au!==bu) return au?-1:1;
-      const sa=idx.status_done!=null?(getStatusFromValue(valAt(a, idx.status_done))?.label):null;
-      const sb=idx.status_done!=null?(getStatusFromValue(valAt(b, idx.status_done))?.label):null;
-      if(rank(sa)!==rank(sb)) return rank(sa)-rank(sb);
-      const da=idx.date!=null?parseJPDate(valAt(a, idx.date)):null;
-      const db=idx.date!=null?parseJPDate(valAt(b, idx.date)):null;
-      return (db?db.getTime():-Infinity)-(da?da.getTime():-Infinity);
-    };
-  }
-
-  // ===== Scan log latest map =====
-  async function fetchScanMap(){
-    try{
-      const res = await fetch(LOG_CSV + "&_ts=" + Date.now(), {cache:'no-store'});
-      if(!res.ok){ return {map:{}, stats:{}}; }
-      const text=await res.text(); const rows=parseCSV(text);
-      if(rows.length<2) return {map:{}, stats:{}};
-      const header=rows[0].map(S);
-      const idx={ ts:header.indexOf('ts'), id:header.indexOf('item_id'), ev:header.indexOf('event'), loc:header.indexOf('location') };
-      const map={}, statsEvent={}, statsLoc={};
-      for(let i=1;i<rows.length;i++){
-        const r=rows[i], id=S(r[idx.id]); const ts=new Date(S(r[idx.ts])||0).getTime(); if(!id||!ts) continue;
-        const ev=S(r[idx.ev]), loc=S(r[idx.loc]);
-        if(!map[id] || ts > map[id].ts){ map[id]={ts, event:ev, location:loc}; }
-        statsEvent[ev]=(statsEvent[ev]||0)+1;
-      }
-      Object.values(map).forEach(({event, location})=>{
-        statsLoc[location||'-']=(statsLoc[location||'-']||0)+1;
-        statsEvent[event||'-']=statsEvent[event||'-']||0;
-      });
-      return {map, stats:{event:statsEvent, location:statsLoc, total:Object.keys(map).length}};
-    }catch(e){ console.warn('fetchScanMap', e); return {map:{}, stats:{}}; }
-  }
-
-  // ===== Rendering =====
-  function renderTable(header, idx, rows, tbodyEl, headEl, latestMap){
-    const extHeader=[...header,'最新イベント','現在位置'];
-    headEl.innerHTML = extHeader.map(h=>`<th>${h}</th>`).join('');
-    tbodyEl.innerHTML = '';
-
-    rows.forEach(r=>{
-      const rowUrg=idx.status_flag!=null?isUrgent(valAt(r, idx.status_flag)):false;
-      const tds=header.map((_,i)=>`<td>${S(r[i])}</td>`);
-
-      // Link 図番 → timeline
-      if(idx.draw!=null){
-        const rawId=S(valAt(r, idx.draw));
-        if(rawId) tds[idx.draw]=`<td><a href="./item.html?id=${encodeURIComponent(rawId)}">${rawId}</a></td>`;
-      }
-
-      const dateCol=idx.date!=null?idx.date:0;
-      const d=idx.date!=null?parseJPDate(valAt(r, idx.date)):null;
-      const dateText=d?toInputDate(d):S(r[dateCol]||'');
-      const statusObj=idx.status_done!=null?getStatusFromValue(valAt(r, idx.status_done)):null;
-      const urgentFlag=rowUrg?`<span class="pill" style="background:#dc2626;color:#fff">至急</span>`:'';
-      const badge=statusObj?`<span class="pill ${statusObj.cls}">${statusObj.label}</span>`:'';
-      tds[dateCol]=`<td>${urgentFlag} ${badge} ${dateText}</td>`;
-
-      const itemKey = S(valAt(r, idx.draw) || valAt(r, idx.item) || valAt(r, idx.note));
-      const latest = latestMap[itemKey];
-      tds.push(`<td>${latest?S(latest.event):'-'}</td>`);
-      tds.push(`<td>${latest?S(latest.location):'-'}</td>`);
-      tbodyEl.insertAdjacentHTML('beforeend', `<tr>${tds.join('')}</tr>`);
-    });
-  }
-
-  function renderProcessBoard(stats){
-    const box=document.getElementById('procPills'),
-          hint=document.getElementById('procHint');
-    box.innerHTML='';
-    if(!stats||!stats.event){ hint.textContent='スキャンデータがありません。'; return; }
-    ['RECEIVE','WIP','QC','PACK','SHIP'].forEach(k=>{
-      const v=stats.event[k]||0; box.insertAdjacentHTML('beforeend', `<div class="pill">${k} ${v}</div>`);
-    });
-    const locPairs=Object.entries(stats.location||{}).sort((a,b)=>b[1]-a[1]).slice(0,6);
-    locPairs.forEach(([loc,c])=> box.insertAdjacentHTML('beforeend', `<div class="pill">LOC ${loc}: ${c}</div>`));
-    hint.textContent = `最新：アイテム数 ${stats.total ?? 0}`;
-  }
-
-  // ===== Main loader =====
-  let aborter=null, isLoading=false;
-  let cached={header:[], rows:[], idx:null, cmp:null};
-  let _scanData={map:{}, stats:{}};
-
-  async function load(){
-    try{
-      if(isLoading){ if(aborter) aborter.abort(); }
-      isLoading=true; const btn=document.getElementById('btnRefresh'); const old=btn.textContent;
-      btn.textContent='Loading...'; btn.disabled=true;
-
-      aborter=new AbortController();
-      const res=await fetch(CSV_URL + "&_ts=" + Date.now(), {signal:aborter.signal, cache:'no-store'});
-      if(!res.ok) throw new Error('HTTP '+res.status);
-      const text=await res.text(); const data=parseCSV(text); if(!data.length) throw new Error('CSV empty');
-
-      const header=data[0], rowsRaw=data.slice(1); const idx=indexByName(header); const cmp=makeComparator(idx);
-      const rows=[...rowsRaw].sort(cmp); cached={header, rows, idx, cmp};
-
-      _scanData = await fetchScanMap();
-
-      const urgentCount = rows.reduce((n,r)=> n + (idx.status_flag!=null && isUrgent(valAt(r, idx.status_flag)) ? 1 : 0), 0);
-      document.getElementById('urgent-banner').textContent =
-        urgentCount>0 ? `⚠ 至急案件が ${urgentCount} 件あります！早急に確認してください。` : '現在、至急案件はありません。';
-
-      renderProcessBoard(_scanData.stats);
-      renderTodaySection();
-      applyFilter(null);
-
-      const cols=[];
-      if(idx.qty!=null) cols.push('数量:'+header[idx.qty]);
-      if(idx.cust!=null) cols.push('顧客:'+header[idx.cust]);
-      if(idx.date!=null) cols.push('出荷日:'+header[idx.date]);
-      document.getElementById('shipHint').textContent =
-        `データ元: ${TAB_NAME}（${rows.length} 行）｜${cols.join(' ｜ ')} ｜ Urgent列: ${idx.status_flag!=null ? header[idx.status_flag] : '—'}`;
-      document.getElementById('filterDate').value = toInputDate(new Date());
-
-      btn.textContent=old; btn.disabled=false; isLoading=false;
-    }catch(e){
-      console.error(e);
-      const btn=document.getElementById('btnRefresh'); btn.textContent='Refresh now'; btn.disabled=false; isLoading=false;
-      document.getElementById('shipHint').textContent='読み込みに失敗しました。シート名/公開設定/列名をご確認ください。';
-    }
-  }
-
-  function renderTodaySection(){
-    const { header, rows, idx, cmp } = cached;
-    if(idx.date==null){ document.getElementById('todaySection').style.display='none'; return; }
-    const today = new Date();
-    const todayRows = rows.filter(r=>{ const d=parseJPDate(valAt(r, idx.date)); return d && sameYMD(d,today); }).sort(cmp);
-    const visible = todayRows.length>0;
-    document.getElementById('todaySection').style.display = visible ? '' : 'none';
-    if(!visible) return;
-    document.getElementById('todayCount').textContent = todayRows.length;
-    renderTable(header, idx, todayRows, document.getElementById('todayBody'), document.getElementById('todayHead'), _scanData.map);
-  }
-
-  // ===== Filter & export =====
-  function applyFilter(dateStr){
-    const { header, rows, idx, cmp } = cached;
-    let view = rows;
-    if(idx.date!=null && dateStr){
-      const target=new Date(dateStr+"T00:00:00");
-      view = rows.filter(r=>{ const d=parseJPDate(valAt(r, idx.date)); return d && sameYMD(d,target); }).sort(cmp);
-    }
-    renderTable(header, idx, view, document.getElementById('shipBody'), document.getElementById('shipHead'), _scanData.map);
-  }
-  function exportExcel(){
-    const wb=XLSX.utils.table_to_book(document.getElementById("shipTable"),{sheet:"出荷状況"});
-    XLSX.writeFile(wb,"出荷状況.xlsx");
-  }
-
-  // ===== Auto refresh =====
-  let timer=null, intervalMs=60000;
-  function startAutoRefresh(ms){
-    intervalMs=ms; clearInterval(timer);
-    timer=setInterval(()=>{ if(document.visibilityState==='visible') load(); }, intervalMs);
-    document.getElementById('intervalInfo').textContent = `${Math.round(intervalMs/1000)}s`;
-    const liveBtn=document.getElementById('btnLive');
-    if(intervalMs<=5000){ liveBtn.classList.add('primary'); liveBtn.textContent='Live: On'; }
-    else{ liveBtn.classList.remove('primary'); liveBtn.textContent='Live: Off'; }
-  }
-
-  // ===== Scanner modal =====
-  let codeReader=null;
-  const scanModal=document.createElement('div');
-  scanModal.className='modal';
-  scanModal.innerHTML=`<div class="box">
-    <div class="hstack" style="justify-content:space-between"><strong>スキャン</strong><button class="btn" id="scanClose">閉じる</button></div>
-    <div class="hstack" style="margin:8px 0; flex-wrap:wrap">
-      <select id="scanEvent" class="btn">
-        <option value="RECEIVE">RECEIVE（受入）</option>
-        <option value="WIP">WIP（工程中）</option>
-        <option value="QC">QC（検査）</option>
-        <option value="PACK">PACK（梱包）</option>
-        <option value="SHIP">SHIP（出荷）</option>
-      </select>
-      <input id="scanLocation" class="btn" placeholder="Location 例: 倉庫A / 組立1 / 出荷ヤード">
-      <input id="scanNote" class="btn" placeholder="Note (任意)">
+  <dialog id="dlgScan" class="paper">
+    <div class="body">
+      <h3>QRスキャン更新（注番: <span id="scanPO"></span>）</h3>
+      <p class="muted s">工程QRを読み取ると切替され履歴に記録されます。</p>
+      <video id="scanVideo" playsinline></video>
+      <canvas id="scanCanvas" class="hidden"></canvas>
+      <div id="scanResult" class="muted s" style="margin-top:.5rem"></div>
     </div>
-    <video id="scanVideo" style="width:100%; border:1px solid var(--line); border-radius:12px"></video>
-    <div id="scanHint" class="small" style="margin-top:6px"></div>
-  </div>`;
-  document.body.appendChild(scanModal);
+    <footer class="row-end"><button class="btn ghost" id="btnScanStart">開始</button><button class="btn" id="btnScanClose">閉じる</button></footer>
+  </dialog>
 
-  async function openScanner(){
-    scanModal.style.display='flex';
-    if(!codeReader){ codeReader = new ZXingBrowser.BrowserMultiFormatReader(); }
-    const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
-    const deviceId = devices?.[0]?.deviceId;
-    document.getElementById('scanHint').textContent = devices.length ? 'カメラ初期化中…' : 'カメラが見つかりません';
-    if(!deviceId) return;
-    const scanVideo=document.getElementById('scanVideo');
-    await codeReader.decodeFromVideoDevice(deviceId, scanVideo, async (result, err, controls)=>{
-      if(result){
-        controls.stop();
-        const itemId=result.getText();
-        document.getElementById('scanHint').textContent=`読み取り: ${itemId} → 送信中…`;
-        try{
-          const payload={ token:LOG_TOKEN, action:'scan', item_id:itemId,
-            event:document.getElementById('scanEvent').value,
-            location:document.getElementById('scanLocation').value||'',
-            user:CURRENT_USER, note:document.getElementById('scanNote').value||'' };
-          const res=await fetch(LOG_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-          const j=await res.json().catch(()=>({ok:false,error:'Invalid JSON'}));
-          if(j.ok){ document.getElementById('scanHint').textContent='記録しました ✅'; await load(); setTimeout(closeScanner,600); }
-          else{ document.getElementById('scanHint').textContent='送信失敗: '+(j.error||res.status); }
-        }catch(e){ document.getElementById('scanHint').textContent='送信エラー: '+e.message; }
-      }
-    });
-  }
-  function closeScanner(){ scanModal.style.display='none'; try{ codeReader?.reset(); }catch(e){} }
-
-  // ===== Manual input modal =====
-  const manualModal=document.createElement('div');
-  manualModal.className='modal';
-  manualModal.innerHTML=`<div class="box">
-    <div class="hstack" style="justify-content:space-between"><strong>入力（手動）</strong><button class="btn" id="manualClose">閉じる</button></div>
-    <div class="hstack" style="flex-direction:column;align-items:stretch;margin:8px 0">
-      <input id="mItemId" placeholder="Item ID（図番/注番 等）" required>
-      <select id="mEvent" required>
-        <option value="">イベントを選択</option>
-        <option value="RECEIVE">RECEIVE（受入）</option>
-        <option value="WIP">WIP（工程中）</option>
-        <option value="QC">QC（検査）</option>
-        <option value="PACK">PACK（梱包）</option>
-        <option value="SHIP">SHIP（出荷）</option>
-      </select>
-      <input id="mLocation" placeholder="Location 例: 倉庫A / 組立1">
-      <input id="mNote" placeholder="Note (任意)">
-      <button class="btn primary" id="mSubmit">Submit</button>
+  <!-- FIX: Dialog khusus admin untuk ユーザー追加 -->
+  <dialog id="dlgAddUser" class="paper">
+    <div class="body">
+      <h3><i class="fa-solid fa-user-plus"></i> ユーザー追加（管理者）</h3>
+      <div class="grid" style="margin-top:.6rem">
+        <input id="nuUser" placeholder="ユーザー名">
+        <input id="nuPass" type="password" placeholder="パスワード">
+        <input id="nuName" placeholder="氏名">
+        <select id="nuDept">
+          <option value="営業">営業</option>
+          <option value="生産技術">生産技術</option>
+          <option value="生産管理部">生産管理部</option>
+          <option value="製造部">製造部</option>
+          <option value="検査部">検査部</option>
+        </select>
+        <select id="nuRole">
+          <option value="member">member</option>
+          <option value="manager">manager</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
     </div>
-    <div id="mHint" class="small"></div>
-  </div>`;
-  document.body.appendChild(manualModal);
+    <footer class="row-end">
+      <button class="btn ghost" id="btnAddUserSave"><i class="fa-solid fa-floppy-disk"></i> 追加</button>
+      <button class="btn" onclick="document.getElementById('dlgAddUser').close()">閉じる</button>
+    </footer>
+  </dialog>
 
-  async function submitManual(){
-    const item_id=S(document.getElementById('mItemId').value);
-    const eventV=S(document.getElementById('mEvent').value);
-    const location=S(document.getElementById('mLocation').value);
-    const note=S(document.getElementById('mNote').value);
-    if(!item_id) return document.getElementById('mHint').textContent='Item ID は必須です。';
-    if(!eventV)  return document.getElementById('mHint').textContent='イベントを選択してください。';
-    document.getElementById('mHint').textContent='送信中…';
-    try{
-      const payload={ token:LOG_TOKEN, action:'scan', item_id, event:eventV, location, user:CURRENT_USER, note };
-      const res=await fetch(LOG_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      const j=await res.json().catch(()=>({ok:false,error:'Invalid JSON'}));
-      if(j.ok){
-        document.getElementById('mHint').textContent='記録しました ✅';
-        await load(); setTimeout(()=>{ manualModal.style.display='none'; },600);
-        document.getElementById('mItemId').value=''; document.getElementById('mEvent').value='';
-        document.getElementById('mLocation').value=''; document.getElementById('mNote').value='';
-      } else document.getElementById('mHint').textContent='送信失敗: '+(j.error||res.status);
-    }catch(e){ document.getElementById('mHint').textContent='送信エラー: '+e.message; }
-  }
+  <dialog id="dlgHistory" class="paper"><div class="body"><h3>更新履歴</h3><div id="histBody"></div></div><footer class="row-end"><button class="btn" onclick="document.getElementById('dlgHistory').close()">閉じる</button></footer></dialog>
+  <dialog id="dlgTicket"  class="paper"><div class="body"></div><footer class="row-end"><button class="btn ghost" onclick="window.print()"><i class="fa-solid fa-print"></i> 印刷</button><button class="btn" onclick="document.getElementById('dlgTicket').close()">閉じる</button></footer></dialog>
+  <dialog id="dlgShip"    class="paper"><div class="body"></div><footer class="row-end"><button class="btn ghost" onclick="window.print()"><i class="fa-solid fa-print"></i> 印刷</button><button class="btn" onclick="document.getElementById('dlgShip').close()">閉じる</button></footer></dialog>
+<!-- Theme Picker -->
+<dialog id="dlgTheme" class="paper" style="max-width:520px">
+  <div class="body">
+    <h3>背景色（テーマ）</h3>
+    <p class="muted s">choice clour</p>
+    <div id="themeGrid" class="theme-grid"></div>
+  </div>
+  <footer class="row-end">
+    <button class="btn" onclick="document.getElementById('dlgTheme').close()">閉じる</button>
+  </footer>
+</dialog>
 
-  // ===== Events =====
-  // header buttons
-  document.getElementById('btnRefresh').addEventListener('click', load);
-  document.getElementById('btnLive').addEventListener('click', ()=>{ startAutoRefresh(intervalMs<=5000?60000:5000); load(); });
-  document.getElementById('btnScan').addEventListener('click', openScanner);
-  document.getElementById('btnExcel').addEventListener('click', exportExcel);
-  document.getElementById('btnToday').addEventListener('click', ()=> applyFilter(toInputDate(new Date())));
-  document.getElementById('btnClear').addEventListener('click', ()=>{ document.getElementById('filterDate').value=""; applyFilter(null); });
-  document.getElementById('filterDate').addEventListener('change', e=> applyFilter(e.target.value||null));
-  document.getElementById('btnManual').addEventListener('click', ()=>{ manualModal.style.display='flex'; });
-
-  // drawer buttons
-  const drawer=document.getElementById('drawer');
-  const openDrawer=()=> drawer.classList.add('open');
-  const closeDrawer=()=> drawer.classList.remove('open');
-  document.getElementById('menuBtn').addEventListener('click', openDrawer);
-  document.getElementById('drawerClose').addEventListener('click', closeDrawer);
-  document.getElementById('drawerCloseBtn').addEventListener('click', closeDrawer);
-  document.getElementById('btnRefresh2').addEventListener('click', ()=>{ closeDrawer(); load(); });
-  document.getElementById('btnLive2').addEventListener('click', ()=>{ closeDrawer(); startAutoRefresh(intervalMs<=5000?60000:5000); load(); });
-  document.getElementById('btnScan2').addEventListener('click', ()=>{ closeDrawer(); openScanner(); });
-  document.getElementById('btnManual2').addEventListener('click', ()=>{ closeDrawer(); manualModal.style.display='flex'; });
-
-  // bottom nav quick actions
-  document.getElementById('bnScan').addEventListener('click', openScanner);
-  document.getElementById('bnMore').addEventListener('click', openDrawer);
-
-  // modal events
-  scanModal.addEventListener('click', e=>{ if(e.target===scanModal) closeScanner(); });
-  scanModal.querySelector('#scanClose').addEventListener('click', closeScanner);
-  manualModal.addEventListener('click', e=>{ if(e.target===manualModal) manualModal.style.display='none'; });
-  manualModal.querySelector('#manualClose').addEventListener('click', ()=> manualModal.style.display='none');
-  manualModal.querySelector('#mSubmit').addEventListener('click', submitManual);
-
-  // boot
-  window.addEventListener('DOMContentLoaded', ()=>{ load(); startAutoRefresh(60000); });
-  </script>
 </body>
 </html>
